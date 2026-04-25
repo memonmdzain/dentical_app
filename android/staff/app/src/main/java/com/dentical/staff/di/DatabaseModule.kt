@@ -11,9 +11,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import javax.inject.Singleton
 
 @Module
@@ -32,14 +29,13 @@ object DatabaseModule {
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                CoroutineScope(Dispatchers.IO).launch {
-                    db.execSQL(
-                        """
-                        INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt)
-                        VALUES ('admin', '${PasswordUtil.hash("admin123")}', 'Administrator', 'ADMIN', 1, ${System.currentTimeMillis()})
-                        """.trimIndent()
-                    )
-                }
+                // Synchronous insert — runs on the DB thread, no race condition
+                val hash = PasswordUtil.hash("admin123")
+                val now = System.currentTimeMillis()
+                db.execSQL(
+                    "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
+                    "VALUES ('admin', '$hash', 'Administrator', 'ADMIN', 1, $now)"
+                )
             }
         })
         .build()
