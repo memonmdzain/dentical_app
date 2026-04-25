@@ -1,0 +1,23 @@
+name: Website CI
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'website/**'
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'website/**'
+
+jobs:
+  placeholder:
+    name: Website CI (Placeholder)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo "Website CI will be configured when website module is set up."
