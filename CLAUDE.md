@@ -62,58 +62,135 @@ website/v0.1.0-dev         ← future
 
 - Each module has its own workflow file
 - Path filters ensure only the changed module builds
-- Android debug APK is built on every push to `develop`
-- APK is uploaded as a GitHub Actions artifact (downloadable for 7 days)
+- Android debug APK built on every push to `develop`
+- APK uploaded as GitHub Actions artifact (downloadable 7 days)
 - Build time: ~5-10 min per run
-- Free tier: 2,000 min/month (public repo = unlimited)
+- Public repo = unlimited free CI/CD minutes
 
 ---
 
-## Android Staff App
+## Tech Stack — Confirmed ✅
 
-### Purpose
-Internal app for dental clinic staff and admins.
-Distributed as a private APK (not on Play Store).
+| Layer | Choice | Notes |
+|-------|--------|-------|
+| Language | Kotlin | ✅ Final |
+| UI | Jetpack Compose | ✅ Final |
+| Architecture | MVVM | ✅ Final |
+| Local DB | Room | ✅ MVP only, migrate to cloud later |
+| Auth MVP | Local username/password + roles | ✅ MVP only |
+| Auth Future | Google OAuth | Phase 2 |
+| Backend Future | PostgreSQL | Phase 2 |
 
-### Features
-- [ ] Appointment booking & management
+---
+
+## Roles & Permissions
+
+| Role | Permissions |
+|------|-------------|
+| `Admin` | Full access, manage staff, assign roles, add users |
+| `Staff` | Limited access — appointments, patients, treatments |
+
+- MVP: First admin account seeded in local DB on first launch
+- Admin can add more users and assign roles locally
+- Phase 2: Migrate to server-side roles with Google OAuth
+
+---
+
+## Screen Structure
+
+```
+Login Screen
+└── Dashboard (Home)
+    ├── Appointments
+    │   ├── Appointment List
+    │   ├── New Appointment
+    │   └── Appointment Detail
+    ├── Patients
+    │   ├── Patient List
+    │   ├── New Patient
+    │   └── Patient Detail
+    │       └── Treatment History
+    ├── Billing
+    │   ├── Invoice List
+    │   └── Invoice Detail
+    ├── Reminders
+    │   └── Send Reminders
+    └── Settings (Admin only)
+        ├── Manage Staff
+        ├── Add User
+        └── Assign Roles
+```
+
+---
+
+## Roadmap
+
+### Phase 1 — MVP (Current)
+- [x] Repo structure & CI/CD setup
+- [ ] App scaffolding & architecture
+- [ ] Local Room database
+- [ ] Local username/password auth
+- [ ] Staff & Admin roles
+- [ ] Appointment management
 - [ ] Patient records
 - [ ] Treatment history
-- [ ] Billing & payments
+- [ ] Billing & invoices
 - [ ] Push reminders
 
-### Tech Stack — Pending Decisions
-- **Language:** Kotlin ✅
-- **UI Framework:** TBD (Jetpack Compose vs XML)
-- **Architecture:** TBD (MVVM recommended)
-- **Local DB:** TBD (Room recommended)
-- **Backend/API:** TBD
-- **Auth:** TBD
+### Phase 2 — Cloud
+- [ ] PostgreSQL backend (language TBD)
+- [ ] Migrate Room to API calls
+- [ ] Google OAuth login
+- [ ] Server-side roles & permissions
+- [ ] Push notifications via FCM
 
-### Progress
-- [ ] Project scaffolding
-- [ ] GitHub Actions setup
-- [ ] App architecture setup
-- [ ] Feature development
+### Phase 3 — Patient App
+- [ ] Separate Kotlin app in `android/patient/`
+- [ ] Patients book appointments
+- [ ] View own records & bills
+- [ ] Online payments
+- [ ] Shares same backend as staff app
 
 ---
 
-## Patient App (Future)
+## Android Staff App Structure
 
-- Separate Kotlin app in `android/patient/`
-- Public Play Store distribution
-- Features: book appointments, view own records, payments, notifications
-- Will share same backend as staff app
+```
+android/staff/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/dentical/staff/
+│   │   │   ├── data/
+│   │   │   │   ├── local/        # Room DB, DAOs, Entities
+│   │   │   │   └── repository/   # Repositories
+│   │   │   ├── di/               # Dependency Injection (Hilt)
+│   │   │   ├── domain/           # Use cases
+│   │   │   ├── ui/
+│   │   │   │   ├── theme/        # Compose theme
+│   │   │   │   ├── login/        # Login screen
+│   │   │   │   ├── dashboard/    # Dashboard screen
+│   │   │   │   ├── appointments/ # Appointment screens
+│   │   │   │   ├── patients/     # Patient screens
+│   │   │   │   ├── billing/      # Billing screens
+│   │   │   │   ├── reminders/    # Reminders screen
+│   │   │   │   └── settings/     # Settings screen (Admin)
+│   │   │   └── MainActivity.kt
+│   │   └── res/
+│   └── build.gradle.kts
+├── build.gradle.kts
+├── settings.gradle.kts
+└── gradlew
+```
 
 ---
 
 ## Dev Environment
 
-- Developer is currently **mobile only** (travelling)
+- Developer currently **mobile only** (travelling)
 - Tools: Termux + Git on Android, GitHub Mobile App
 - Claude generates files → developer commits via Termux
 - PRs reviewed and merged via GitHub Mobile App
-- APK downloaded from GitHub Actions artifacts and installed directly
+- APK downloaded from GitHub Actions artifacts → installed directly on phone
 
 ---
 
@@ -121,42 +198,52 @@ Distributed as a private APK (not on Play Store).
 
 | Decision | Choice | Reason |
 |----------|--------|--------|
-| Monorepo | Yes | Simpler to manage, CI/CD handles isolation |
-| Single `main` branch | Yes | Path filters in CI/CD handle module isolation |
+| Monorepo | Yes | Simpler, CI/CD handles isolation |
+| Single `main` branch | Yes | Path filters handle module isolation |
 | Staff & patient apps separate | Yes | Different users, security, distribution |
 | Start with staff app | Yes | Core clinic operations first |
 | Public repo during dev | Yes | Unlimited free CI/CD minutes |
+| Jetpack Compose | Yes | Modern, recommended for new apps |
+| MVVM | Yes | Google standard, clean architecture |
+| Room for MVP | Yes | Simple, offline, migrate to cloud later |
+| Local auth for MVP | Yes | No backend needed for MVP |
+| Separate roles | Yes | Admin & Staff with different permissions |
 
 ---
 
 ## Pending Decisions
 
-- [ ] UI framework: Jetpack Compose vs XML Views
-- [ ] Architecture pattern: MVVM (recommended)
-- [ ] Local database: Room (recommended)
-- [ ] Backend language & framework
-- [ ] Authentication method
-- [ ] Cloud provider for backend
+- [ ] Backend language & framework (Phase 2)
+- [ ] Cloud provider for PostgreSQL (Phase 2)
+- [ ] FCM push notification setup (Phase 2)
+- [ ] Google OAuth client ID setup (Phase 2)
 
 ---
 
+## Current Status
+
+**Phase 1 — MVP in progress**
+- ✅ Repo structure created
+- ✅ CI/CD workflows set up
+- ✅ Tech stack decided
+- 🚧 App scaffolding — IN PROGRESS
+- ⏳ Feature development — pending
+
 ## What's Next
 
-1. Decide Android tech stack (Compose vs XML, architecture)
-2. Scaffold the staff app project structure
-3. Set up GitHub Actions Android build
-4. Begin first feature: Appointment Management
+1. Scaffold `android/staff/` project structure
+2. Fix `android-staff.yml` CI to build real project
+3. First feature: Login screen + local auth
 
 ---
 
 ## How to Use This File
 
 At the start of each new Claude session:
-1. Open this file
-2. Copy all content
-3. Paste as your first message to Claude
-4. Claude will have full context immediately
+1. Tap + → Add from GitHub → select CLAUDE.md
+2. Claude will have full context immediately
+3. No re-explaining needed
 
 ---
 
-> Last updated: April 2026
+> Last updated: April 2026 — Phase 1 scaffolding started
