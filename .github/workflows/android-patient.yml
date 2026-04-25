@@ -1,0 +1,23 @@
+name: Android Patient CI
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'android/patient/**'
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'android/patient/**'
+
+jobs:
+  placeholder:
+    name: Android Patient CI (Placeholder)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo "Patient app CI will be configured when patient module is set up."
