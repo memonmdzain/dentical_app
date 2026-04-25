@@ -5,8 +5,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.dentical.staff.data.local.DenticalDatabase
-import com.dentical.staff.data.local.entities.UserEntity
-import com.dentical.staff.data.local.entities.UserRole
 import com.dentical.staff.util.PasswordUtil
 import dagger.Module
 import dagger.Provides
@@ -30,10 +28,10 @@ object DatabaseModule {
             DenticalDatabase::class.java,
             "dentical_staff.db"
         )
+        .addMigrations(DenticalDatabase.MIGRATION_1_2)
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                // Seed default admin on first launch
                 CoroutineScope(Dispatchers.IO).launch {
                     db.execSQL(
                         """
@@ -47,18 +45,9 @@ object DatabaseModule {
         .build()
     }
 
-    @Provides
-    fun provideUserDao(db: DenticalDatabase) = db.userDao()
-
-    @Provides
-    fun providePatientDao(db: DenticalDatabase) = db.patientDao()
-
-    @Provides
-    fun provideAppointmentDao(db: DenticalDatabase) = db.appointmentDao()
-
-    @Provides
-    fun provideTreatmentDao(db: DenticalDatabase) = db.treatmentDao()
-
-    @Provides
-    fun provideInvoiceDao(db: DenticalDatabase) = db.invoiceDao()
+    @Provides fun provideUserDao(db: DenticalDatabase) = db.userDao()
+    @Provides fun providePatientDao(db: DenticalDatabase) = db.patientDao()
+    @Provides fun provideAppointmentDao(db: DenticalDatabase) = db.appointmentDao()
+    @Provides fun provideTreatmentDao(db: DenticalDatabase) = db.treatmentDao()
+    @Provides fun provideInvoiceDao(db: DenticalDatabase) = db.invoiceDao()
 }

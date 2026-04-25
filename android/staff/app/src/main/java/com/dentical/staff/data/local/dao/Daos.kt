@@ -27,14 +27,17 @@ interface UserDao {
 
 @Dao
 interface PatientDao {
-    @Query("SELECT * FROM patients ORDER BY fullName ASC")
+    @Query("SELECT * FROM patients ORDER BY patientCode ASC")
     fun getAllPatients(): Flow<List<PatientEntity>>
 
     @Query("SELECT * FROM patients WHERE id = :id")
     suspend fun getPatientById(id: Long): PatientEntity?
 
-    @Query("SELECT * FROM patients WHERE fullName LIKE '%' || :query || '%' OR phone LIKE '%' || :query || '%'")
+    @Query("SELECT * FROM patients WHERE fullName LIKE '%' || :query || '%' OR phone LIKE '%' || :query || '%' OR patientCode LIKE '%' || :query || '%'")
     fun searchPatients(query: String): Flow<List<PatientEntity>>
+
+    @Query("SELECT MAX(CAST(patientCode AS INTEGER)) FROM patients")
+    suspend fun getMaxPatientCode(): Int?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPatient(patient: PatientEntity): Long
@@ -44,6 +47,9 @@ interface PatientDao {
 
     @Delete
     suspend fun deletePatient(patient: PatientEntity)
+
+    @Query("SELECT COUNT(*) FROM patients")
+    suspend fun getPatientCount(): Int
 }
 
 @Dao

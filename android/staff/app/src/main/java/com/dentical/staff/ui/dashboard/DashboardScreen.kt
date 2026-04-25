@@ -11,9 +11,9 @@ import com.dentical.staff.ui.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(
-    onNavigate: (String) -> Unit
-) {
+fun DashboardScreen(onNavigate: (String) -> Unit) {
+    var selectedTab by remember { mutableStateOf(0) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -29,25 +29,25 @@ fun DashboardScreen(
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Home, "Dashboard") },
                     label = { Text("Home") },
-                    selected = true,
-                    onClick = {}
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.CalendarMonth, "Appointments") },
                     label = { Text("Schedule") },
-                    selected = false,
+                    selected = selectedTab == 1,
                     onClick = { onNavigate(Screen.Appointments.route) }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.People, "Patients") },
                     label = { Text("Patients") },
-                    selected = false,
+                    selected = selectedTab == 2,
                     onClick = { onNavigate(Screen.Patients.route) }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Receipt, "Billing") },
                     label = { Text("Billing") },
-                    selected = false,
+                    selected = selectedTab == 3,
                     onClick = { onNavigate(Screen.Billing.route) }
                 )
             }
@@ -59,16 +59,11 @@ fun DashboardScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Welcome back!",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Dashboard coming soon...",
+            Text("Welcome back!", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(8.dp))
+            Text("Dashboard — coming soon",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

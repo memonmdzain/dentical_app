@@ -2,33 +2,29 @@ package com.dentical.staff.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.dentical.staff.ui.login.LoginScreen
+import androidx.navigation.navArgument
 import com.dentical.staff.ui.dashboard.DashboardScreen
+import com.dentical.staff.ui.login.LoginScreen
+import com.dentical.staff.ui.patients.AddPatientScreen
+import com.dentical.staff.ui.patients.PatientDetailScreen
+import com.dentical.staff.ui.patients.PatientListScreen
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Dashboard : Screen("dashboard")
-    object Appointments : Screen("appointments")
-    object NewAppointment : Screen("appointments/new")
-    object AppointmentDetail : Screen("appointments/{appointmentId}") {
-        fun createRoute(id: Long) = "appointments/$id"
-    }
     object Patients : Screen("patients")
-    object NewPatient : Screen("patients/new")
+    object AddPatient : Screen("patients/new")
     object PatientDetail : Screen("patients/{patientId}") {
         fun createRoute(id: Long) = "patients/$id"
     }
+    object Appointments : Screen("appointments")
     object Billing : Screen("billing")
-    object InvoiceDetail : Screen("billing/{invoiceId}") {
-        fun createRoute(id: Long) = "billing/$id"
-    }
     object Reminders : Screen("reminders")
     object Settings : Screen("settings")
-    object ManageStaff : Screen("settings/staff")
-    object AddUser : Screen("settings/staff/new")
 }
 
 @Composable
@@ -55,6 +51,30 @@ fun DenticalNavHost(
             )
         }
 
-        // More screens will be added as features are built
+        composable(Screen.Patients.route) {
+            PatientListScreen(
+                onAddPatient = { navController.navigate(Screen.AddPatient.route) },
+                onPatientClick = { id -> navController.navigate(Screen.PatientDetail.createRoute(id)) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.AddPatient.route) {
+            AddPatientScreen(
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.PatientDetail.route,
+            arguments = listOf(navArgument("patientId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val patientId = backStackEntry.arguments?.getLong("patientId") ?: return@composable
+            PatientDetailScreen(
+                patientId = patientId,
+                onBack = { navController.popBackStack() }
+            )
+        }
     }
 }
