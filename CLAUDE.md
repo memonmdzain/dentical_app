@@ -1,6 +1,7 @@
 # 🦷 Dentical App — Claude Context File
 
 > Paste this file at the start of every new Claude session to restore full project context.
+> Tip: Tap + → Add from GitHub → select this file to load it instantly.
 
 ---
 
@@ -10,6 +11,8 @@ A dental clinic management system built as a multi-module monorepo.
 - **Repo:** github.com/memonmdzain/dentical_app
 - **Owner:** memonmdzain (personal GitHub account)
 - **Visibility:** Public during development, private after launch
+- **Dev environment:** Mobile only (travelling) — Termux + Git on Android
+- **Repo location on device:** ~/storage/dentical_app
 
 ---
 
@@ -34,6 +37,44 @@ dentical_app/
 
 ---
 
+## Android Staff App Structure
+
+```
+android/staff/
+├── app/src/main/java/com/dentical/staff/
+│   ├── data/
+│   │   ├── local/
+│   │   │   ├── dao/          # Daos.kt — all DAOs in one file
+│   │   │   ├── entities/     # One file per entity
+│   │   │   ├── Converters.kt
+│   │   │   └── DenticalDatabase.kt
+│   │   └── repository/
+│   │       └── PatientRepository.kt
+│   ├── di/
+│   │   └── DatabaseModule.kt
+│   ├── ui/
+│   │   ├── theme/
+│   │   ├── login/            # ✅ Done
+│   │   ├── dashboard/        # 🚧 Placeholder
+│   │   ├── patients/         # ✅ Done
+│   │   ├── appointments/     # ⏳ Next
+│   │   ├── billing/          # ⏳ Planned
+│   │   ├── reminders/        # ⏳ Planned
+│   │   └── settings/         # ⏳ Planned
+│   ├── util/
+│   │   └── PasswordUtil.kt
+│   ├── DenticalApplication.kt
+│   └── MainActivity.kt
+├── gradle/
+│   ├── libs.versions.toml
+│   └── wrapper/
+├── build.gradle.kts
+├── settings.gradle.kts
+└── gradle.properties
+```
+
+---
+
 ## Branch & Git Strategy
 
 | Branch | Purpose |
@@ -48,6 +89,9 @@ dentical_app/
 android/feature/xxx → develop (PR) → main (PR + release tag)
 ```
 
+### Current active branch
+`android/feature/scaffold`
+
 ### Version Tags
 ```
 android-staff/v0.1.0-dev   ← current
@@ -60,12 +104,12 @@ website/v0.1.0-dev         ← future
 
 ## CI/CD — GitHub Actions
 
-- Each module has its own workflow file
-- Path filters ensure only the changed module builds
+- Path filters — only changed module triggers build
 - Android debug APK built on every push to `develop`
-- APK uploaded as GitHub Actions artifact (downloadable 7 days)
-- Build time: ~5-10 min per run
-- Public repo = unlimited free CI/CD minutes
+- APK uploaded as artifact — downloadable for 7 days
+- Build time: ~3-5 min (cached)
+- Public repo = unlimited free minutes
+- **To test:** Download APK from Actions → uninstall old → install new
 
 ---
 
@@ -76,10 +120,19 @@ website/v0.1.0-dev         ← future
 | Language | Kotlin | ✅ Final |
 | UI | Jetpack Compose | ✅ Final |
 | Architecture | MVVM | ✅ Final |
-| Local DB | Room | ✅ MVP only, migrate to cloud later |
-| Auth MVP | Local username/password + roles | ✅ MVP only |
+| Local DB | Room (v2) | ✅ MVP, migrate to cloud later |
+| DI | Hilt | ✅ Final |
+| Navigation | Jetpack Navigation Compose | ✅ Final |
+| Auth MVP | Local username/password + roles | ✅ Working |
 | Auth Future | Google OAuth | Phase 2 |
 | Backend Future | PostgreSQL | Phase 2 |
+
+---
+
+## Default Admin Credentials
+- **Username:** admin
+- **Password:** admin123
+- Seeded on first app launch via Room DB callback
 
 ---
 
@@ -87,35 +140,43 @@ website/v0.1.0-dev         ← future
 
 | Role | Permissions |
 |------|-------------|
-| `Admin` | Full access, manage staff, assign roles, add users |
-| `Staff` | Limited access — appointments, patients, treatments |
+| `ADMIN` | Full access, manage staff, assign roles, add users, delete patients |
+| `STAFF` | Appointments, patients, treatments, billing (no delete, no settings) |
 
-- MVP: First admin account seeded in local DB on first launch
-- Admin can add more users and assign roles locally
-- Phase 2: Migrate to server-side roles with Google OAuth
+- MVP: First admin seeded locally on first launch
+- Phase 2: Server-side roles with Google OAuth
+
+---
+
+## Database
+
+- **Version:** 2
+- **Migration:** 1→2 drops and recreates patients table with new fields
+- **Entities:** UserEntity, PatientEntity, AppointmentEntity, TreatmentEntity, InvoiceEntity
 
 ---
 
 ## Screen Structure
 
 ```
-Login Screen
-└── Dashboard (Home)
-    ├── Appointments
+Login Screen ✅
+└── Dashboard (Home) 🚧
+    ├── Appointments ⏳
     │   ├── Appointment List
     │   ├── New Appointment
     │   └── Appointment Detail
-    ├── Patients
-    │   ├── Patient List
-    │   ├── New Patient
-    │   └── Patient Detail
-    │       └── Treatment History
-    ├── Billing
+    ├── Patients ✅
+    │   ├── Patient List ✅
+    │   ├── Add New Patient ✅
+    │   └── Patient Detail ✅
+    │       ├── Overview Tab ✅
+    │       ├── Treatments Tab (placeholder)
+    │       └── Invoices Tab (placeholder)
+    ├── Billing ⏳
     │   ├── Invoice List
     │   └── Invoice Detail
-    ├── Reminders
-    │   └── Send Reminders
-    └── Settings (Admin only)
+    ├── Reminders ⏳
+    └── Settings ⏳ (Admin only)
         ├── Manage Staff
         ├── Add User
         └── Assign Roles
@@ -123,19 +184,42 @@ Login Screen
 
 ---
 
+## Patient Feature — Spec (Completed ✅)
+
+### Patient Entity Fields
+- `id` — auto increment PK
+- `patientCode` — starts at 10001, incremental, unique
+- `fullName`, `dateOfBirth`, `gender`
+- `phone` — optional if checkbox "phone not available" checked
+- `isPhoneAvailable` — checkbox
+- `guardianName`, `guardianPhone` — required if patient is minor (age < 18)
+- `referralSource` — dropdown: Walk-in, Referral from Doctor, Friend/Family, Social Media, Other
+- `referralDetail` — conditional text, required if not Walk-in. Label changes by source
+- `email`, `address`, `medicalConditions`, `allergies` — optional
+
+### Dynamic Form Rules
+| Condition | Behaviour |
+|-----------|-----------|
+| DOB < 18 | Guardian fields appear and become required |
+| "Phone not available" checked | Phone disabled, not required |
+| Minor + phone not available | Guardian phone becomes required |
+| Referral ≠ Walk-in | Detail field appears, required |
+
+---
+
 ## Roadmap
 
 ### Phase 1 — MVP (Current)
-- [x] Repo structure & CI/CD setup
-- [ ] App scaffolding & architecture
-- [ ] Local Room database
-- [ ] Local username/password auth
-- [ ] Staff & Admin roles
+- [x] Repo structure & CI/CD
+- [x] App scaffolding
+- [x] Login + local auth + roles
+- [x] Patient management (list, add, detail)
 - [ ] Appointment management
-- [ ] Patient records
+- [ ] Dashboard with real stats
 - [ ] Treatment history
 - [ ] Billing & invoices
 - [ ] Push reminders
+- [ ] Settings — manage staff & roles
 
 ### Phase 2 — Cloud
 - [ ] PostgreSQL backend (language TBD)
@@ -146,51 +230,10 @@ Login Screen
 
 ### Phase 3 — Patient App
 - [ ] Separate Kotlin app in `android/patient/`
-- [ ] Patients book appointments
+- [ ] Book appointments
 - [ ] View own records & bills
 - [ ] Online payments
-- [ ] Shares same backend as staff app
-
----
-
-## Android Staff App Structure
-
-```
-android/staff/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/dentical/staff/
-│   │   │   ├── data/
-│   │   │   │   ├── local/        # Room DB, DAOs, Entities
-│   │   │   │   └── repository/   # Repositories
-│   │   │   ├── di/               # Dependency Injection (Hilt)
-│   │   │   ├── domain/           # Use cases
-│   │   │   ├── ui/
-│   │   │   │   ├── theme/        # Compose theme
-│   │   │   │   ├── login/        # Login screen
-│   │   │   │   ├── dashboard/    # Dashboard screen
-│   │   │   │   ├── appointments/ # Appointment screens
-│   │   │   │   ├── patients/     # Patient screens
-│   │   │   │   ├── billing/      # Billing screens
-│   │   │   │   ├── reminders/    # Reminders screen
-│   │   │   │   └── settings/     # Settings screen (Admin)
-│   │   │   └── MainActivity.kt
-│   │   └── res/
-│   └── build.gradle.kts
-├── build.gradle.kts
-├── settings.gradle.kts
-└── gradlew
-```
-
----
-
-## Dev Environment
-
-- Developer currently **mobile only** (travelling)
-- Tools: Termux + Git on Android, GitHub Mobile App
-- Claude generates files → developer commits via Termux
-- PRs reviewed and merged via GitHub Mobile App
-- APK downloaded from GitHub Actions artifacts → installed directly on phone
+- [ ] Shares backend with staff app
 
 ---
 
@@ -205,45 +248,57 @@ android/staff/
 | Public repo during dev | Yes | Unlimited free CI/CD minutes |
 | Jetpack Compose | Yes | Modern, recommended for new apps |
 | MVVM | Yes | Google standard, clean architecture |
-| Room for MVP | Yes | Simple, offline, migrate to cloud later |
-| Local auth for MVP | Yes | No backend needed for MVP |
+| Room for MVP | Yes | Simple, offline first |
+| Local auth for MVP | Yes | No backend needed yet |
 | Separate roles | Yes | Admin & Staff with different permissions |
+| Patient code starts at 10001 | Yes | Business requirement |
+| Staff & patient apps separate | Yes | Different security, distribution |
 
 ---
 
 ## Pending Decisions
 
+- [ ] Appointments — linked to specific dentist? (likely yes)
+- [ ] Appointments — calendar view or list view?
 - [ ] Backend language & framework (Phase 2)
 - [ ] Cloud provider for PostgreSQL (Phase 2)
-- [ ] FCM push notification setup (Phase 2)
-- [ ] Google OAuth client ID setup (Phase 2)
-
----
-
-## Current Status
-
-**Phase 1 — MVP in progress**
-- ✅ Repo structure created
-- ✅ CI/CD workflows set up
-- ✅ Tech stack decided
-- 🚧 App scaffolding — IN PROGRESS
-- ⏳ Feature development — pending
-
-## What's Next
-
-1. Scaffold `android/staff/` project structure
-2. Fix `android-staff.yml` CI to build real project
-3. First feature: Login screen + local auth
+- [ ] Google OAuth client ID (Phase 2)
 
 ---
 
 ## How to Use This File
 
-At the start of each new Claude session:
+**Start of each new Claude session:**
 1. Tap + → Add from GitHub → select CLAUDE.md
-2. Claude will have full context immediately
-3. No re-explaining needed
+2. Paste content as first message
+3. Claude has full context immediately
 
 ---
 
-> Last updated: April 2026 — Phase 1 scaffolding started
+## Working Commands (Termux)
+
+```bash
+# Navigate to repo
+cd ~/storage/dentical_app
+
+# Check status
+git status
+git log --oneline
+
+# New feature branch
+git checkout -b android/feature/feature-name
+
+# After downloading files from Claude
+unzip ~/storage/downloads/filename.zip -d ~/scaffold_temp
+cp -r ~/scaffold_temp/dentical_app/* ~/storage/dentical_app/
+rm -rf ~/scaffold_temp
+
+# Commit and push
+git add .
+git commit -m "feat: description"
+git push origin android/feature/feature-name
+```
+
+---
+
+> Last updated: April 2026 — Patients feature complete ✅
