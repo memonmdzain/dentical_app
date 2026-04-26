@@ -32,11 +32,27 @@ object DatabaseModule {
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                val hash = PasswordUtil.hash("admin123")
                 val now = System.currentTimeMillis()
+
+                // Seed default admin
+                val adminHash = PasswordUtil.hash("admin123")
                 db.execSQL(
                     "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
-                    "VALUES ('admin', '$hash', 'Administrator', 'ADMIN', 1, $now)"
+                    "VALUES ('admin', '$adminHash', 'Administrator', 'ADMIN', 1, $now)"
+                )
+
+                // Seed dummy dentist for testing
+                val dentistHash = PasswordUtil.hash("dentist123")
+                db.execSQL(
+                    "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
+                    "VALUES ('dr.smith', '$dentistHash', 'Dr. John Smith', 'DENTIST', 1, $now)"
+                )
+
+                // Seed second dummy dentist
+                val dentist2Hash = PasswordUtil.hash("dentist123")
+                db.execSQL(
+                    "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
+                    "VALUES ('dr.jones', '$dentist2Hash', 'Dr. Sarah Jones', 'DENTIST', 1, $now)"
                 )
             }
         })

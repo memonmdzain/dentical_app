@@ -47,22 +47,25 @@ android/staff/
 │   │   │   ├── dao/          # Daos.kt — all DAOs in one file
 │   │   │   ├── entities/     # One file per entity
 │   │   │   ├── Converters.kt
-│   │   │   └── DenticalDatabase.kt
+│   │   │   └── DenticalDatabase.kt (version 3, exportSchema = false)
 │   │   └── repository/
-│   │       └── PatientRepository.kt
+│   │       ├── PatientRepository.kt
+│   │       └── AppointmentRepository.kt
 │   ├── di/
 │   │   └── DatabaseModule.kt
 │   ├── ui/
 │   │   ├── theme/
+│   │   ├── navigation/       # DenticalNavHost.kt
 │   │   ├── login/            # ✅ Done
-│   │   ├── dashboard/        # 🚧 Placeholder
+│   │   ├── dashboard/        # 🚧 Placeholder (nav wired)
 │   │   ├── patients/         # ✅ Done
-│   │   ├── appointments/     # ⏳ Next
+│   │   ├── appointments/     # ✅ Done
 │   │   ├── billing/          # ⏳ Planned
 │   │   ├── reminders/        # ⏳ Planned
 │   │   └── settings/         # ⏳ Planned
 │   ├── util/
-│   │   └── PasswordUtil.kt
+│   │   ├── PasswordUtil.kt
+│   │   └── PhoneUtil.kt
 │   ├── DenticalApplication.kt
 │   └── MainActivity.kt
 ├── gradle/
@@ -80,7 +83,7 @@ android/staff/
 | Branch | Purpose |
 |--------|---------|
 | `main` | Production only. Protected. Never commit directly. |
-| `develop` | Integration branch. All features merge here first. |
+| `develop` | Integration branch. Merge here after each working feature. |
 | `android/feature/*` | One branch per feature |
 | `android/fix/*` | Bug fixes |
 
@@ -89,8 +92,14 @@ android/staff/
 android/feature/xxx → develop (PR) → main (PR + release tag)
 ```
 
+### IMPORTANT — Code Access Between Sessions
+- Claude can only read files from branches visible via GitHub connector
+- Always merge working features to `develop` after testing
+- At start of new session: tap + → Add from GitHub → select files needed
+- For code edits, share the specific file via GitHub connector
+
 ### Current active branch
-`android/feature/scaffold`
+`android/feature/scaffold` — merge to `develop` when appointments build passes
 
 ### Version Tags
 ```
@@ -120,7 +129,7 @@ website/v0.1.0-dev         ← future
 | Language | Kotlin | ✅ Final |
 | UI | Jetpack Compose | ✅ Final |
 | Architecture | MVVM | ✅ Final |
-| Local DB | Room (v2) | ✅ MVP, migrate to cloud later |
+| Local DB | Room (v3) | ✅ MVP, migrate to cloud later |
 | DI | Hilt | ✅ Final |
 | Navigation | Jetpack Navigation Compose | ✅ Final |
 | Auth MVP | Local username/password + roles | ✅ Working |
@@ -129,10 +138,14 @@ website/v0.1.0-dev         ← future
 
 ---
 
-## Default Admin Credentials
-- **Username:** admin
-- **Password:** admin123
-- Seeded on first app launch via Room DB callback
+## Default Seeded Users (on fresh install)
+| Username | Password | Role |
+|----------|----------|------|
+| admin | admin123 | ADMIN |
+| dr.smith | dentist123 | DENTIST |
+| dr.jones | dentist123 | DENTIST |
+
+> Dummy dentists are for testing only — will be removed when Settings/user management is built.
 
 ---
 
@@ -141,17 +154,17 @@ website/v0.1.0-dev         ← future
 | Role | Permissions |
 |------|-------------|
 | `ADMIN` | Full access, manage staff, assign roles, add users, delete patients |
+| `DENTIST` | View own appointments, update treatment, view patients |
 | `STAFF` | Appointments, patients, treatments, billing (no delete, no settings) |
-
-- MVP: First admin seeded locally on first launch
-- Phase 2: Server-side roles with Google OAuth
 
 ---
 
 ## Database
 
-- **Version:** 2
-- **Migration:** 1→2 drops and recreates patients table with new fields
+- **Version:** 3
+- **exportSchema:** false
+- **Migration 1→2:** Recreates patients table with new fields
+- **Migration 2→3:** Recreates appointments table with type enum and dentistId
 - **Entities:** UserEntity, PatientEntity, AppointmentEntity, TreatmentEntity, InvoiceEntity
 
 ---
@@ -161,10 +174,14 @@ website/v0.1.0-dev         ← future
 ```
 Login Screen ✅
 └── Dashboard (Home) 🚧
-    ├── Appointments ⏳
-    │   ├── Appointment List
-    │   ├── New Appointment
-    │   └── Appointment Detail
+    ├── Appointments ✅
+    │   ├── Appointment List (list view) ✅
+    │   ├── Appointment List (calendar view - day/week/month) ✅
+    │   ├── Add Appointment ✅
+    │   └── Appointment Detail ✅
+    │       ├── Status update buttons ✅
+    │       ├── Call button ✅
+    │       └── WhatsApp button ✅
     ├── Patients ✅
     │   ├── Patient List ✅
     │   ├── Add New Patient ✅
@@ -184,26 +201,43 @@ Login Screen ✅
 
 ---
 
-## Patient Feature — Spec (Completed ✅)
+## Patient Feature — Spec ✅
 
 ### Patient Entity Fields
-- `id` — auto increment PK
 - `patientCode` — starts at 10001, incremental, unique
 - `fullName`, `dateOfBirth`, `gender`
-- `phone` — optional if checkbox "phone not available" checked
+- `phone` — optional if "phone not available" checked
 - `isPhoneAvailable` — checkbox
-- `guardianName`, `guardianPhone` — required if patient is minor (age < 18)
-- `referralSource` — dropdown: Walk-in, Referral from Doctor, Friend/Family, Social Media, Other
-- `referralDetail` — conditional text, required if not Walk-in. Label changes by source
+- `guardianName`, `guardianPhone` — required if minor (age < 18)
+- `referralSource` — Walk-in, Referral from Doctor, Friend/Family, Social Media, Other
+- `referralDetail` — conditional, required if not Walk-in
 - `email`, `address`, `medicalConditions`, `allergies` — optional
 
-### Dynamic Form Rules
-| Condition | Behaviour |
-|-----------|-----------|
-| DOB < 18 | Guardian fields appear and become required |
-| "Phone not available" checked | Phone disabled, not required |
-| Minor + phone not available | Guardian phone becomes required |
-| Referral ≠ Walk-in | Detail field appears, required |
+---
+
+## Appointments Feature — Spec ✅
+
+### Fields
+- Patient (real-time search by name, phone, ID)
+- Dentist (dropdown of active dentists)
+- Type (Consultation, Cleaning, Filling, Root Canal, Extraction, Braces, X-Ray, Whitening, Crown/Bridge, Other)
+- Date + Time (pickers)
+- Duration (15, 30, 45, 60, 90 min)
+- Notes (optional)
+- Status (auto = Scheduled)
+
+### Statuses
+Scheduled → Confirmed → In Progress → Completed / Cancelled / No Show
+
+### Phone Number Formatting (PhoneUtil)
+- Starts with + → use as is
+- Starts with 00 → replace with +
+- Starts with 0 → replace with +91
+- Else → prepend +91
+
+### Call & WhatsApp
+- Priority: patient phone → guardian phone → disabled
+- WhatsApp opens wa.me URL
 
 ---
 
@@ -213,8 +247,8 @@ Login Screen ✅
 - [x] Repo structure & CI/CD
 - [x] App scaffolding
 - [x] Login + local auth + roles
-- [x] Patient management (list, add, detail)
-- [ ] Appointment management
+- [x] Patient management
+- [x] Appointment management
 - [ ] Dashboard with real stats
 - [ ] Treatment history
 - [ ] Billing & invoices
@@ -230,9 +264,7 @@ Login Screen ✅
 
 ### Phase 3 — Patient App
 - [ ] Separate Kotlin app in `android/patient/`
-- [ ] Book appointments
-- [ ] View own records & bills
-- [ ] Online payments
+- [ ] Book appointments, view records, payments
 - [ ] Shares backend with staff app
 
 ---
@@ -244,34 +276,21 @@ Login Screen ✅
 | Monorepo | Yes | Simpler, CI/CD handles isolation |
 | Single `main` branch | Yes | Path filters handle module isolation |
 | Staff & patient apps separate | Yes | Different users, security, distribution |
-| Start with staff app | Yes | Core clinic operations first |
-| Public repo during dev | Yes | Unlimited free CI/CD minutes |
-| Jetpack Compose | Yes | Modern, recommended for new apps |
-| MVVM | Yes | Google standard, clean architecture |
+| Jetpack Compose | Yes | Modern standard |
+| MVVM | Yes | Google standard |
 | Room for MVP | Yes | Simple, offline first |
 | Local auth for MVP | Yes | No backend needed yet |
-| Separate roles | Yes | Admin & Staff with different permissions |
 | Patient code starts at 10001 | Yes | Business requirement |
-| Staff & patient apps separate | Yes | Different security, distribution |
+| Dummy dentists seeded | Yes | Testing until Settings built |
+| Merge to develop after each feature | Yes | Allows Claude to read code in new sessions |
 
 ---
 
 ## Pending Decisions
 
-- [ ] Appointments — linked to specific dentist? (likely yes)
-- [ ] Appointments — calendar view or list view?
 - [ ] Backend language & framework (Phase 2)
 - [ ] Cloud provider for PostgreSQL (Phase 2)
 - [ ] Google OAuth client ID (Phase 2)
-
----
-
-## How to Use This File
-
-**Start of each new Claude session:**
-1. Tap + → Add from GitHub → select CLAUDE.md
-2. Paste content as first message
-3. Claude has full context immediately
 
 ---
 
@@ -281,14 +300,7 @@ Login Screen ✅
 # Navigate to repo
 cd ~/storage/dentical_app
 
-# Check status
-git status
-git log --oneline
-
-# New feature branch
-git checkout -b android/feature/feature-name
-
-# After downloading files from Claude
+# Unzip Claude's files
 unzip ~/storage/downloads/filename.zip -d ~/scaffold_temp
 cp -r ~/scaffold_temp/dentical_app/* ~/storage/dentical_app/
 rm -rf ~/scaffold_temp
@@ -296,9 +308,23 @@ rm -rf ~/scaffold_temp
 # Commit and push
 git add .
 git commit -m "feat: description"
-git push origin android/feature/feature-name
+git push origin android/feature/branch-name
+
+# Merge feature to develop (do after each working feature)
+git checkout develop
+git merge android/feature/scaffold
+git push origin develop
 ```
 
 ---
 
-> Last updated: April 2026 — Patients feature complete ✅
+## How to Use This File
+
+**Start of each new Claude session:**
+1. Tap + → Add from GitHub → select CLAUDE.md
+2. Also add any specific code files you want Claude to read/edit
+3. Claude has full context immediately
+
+---
+
+> Last updated: April 2026 — Appointments feature complete ✅
