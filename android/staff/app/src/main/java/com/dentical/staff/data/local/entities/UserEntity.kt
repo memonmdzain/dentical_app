@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 enum class UserRole {
-    ADMIN, STAFF
+    ADMIN, DENTIST, STAFF
 }
 
 @Entity(tableName = "users")

@@ -16,7 +16,7 @@ import com.dentical.staff.data.local.entities.*
         TreatmentEntity::class,
         InvoiceEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -30,7 +30,6 @@ abstract class DenticalDatabase : RoomDatabase() {
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Recreate patients table with new fields
                 db.execSQL("DROP TABLE IF EXISTS patients")
                 db.execSQL("""
                     CREATE TABLE patients (
@@ -54,6 +53,32 @@ abstract class DenticalDatabase : RoomDatabase() {
                     )
                 """.trimIndent())
                 db.execSQL("CREATE UNIQUE INDEX index_patients_patientCode ON patients(patientCode)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Recreate appointments with new fields
+                db.execSQL("DROP TABLE IF EXISTS appointments")
+                db.execSQL("""
+                    CREATE TABLE appointments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        patientId INTEGER NOT NULL,
+                        dentistId INTEGER,
+                        type TEXT NOT NULL DEFAULT 'CONSULTATION',
+                        scheduledAt INTEGER NOT NULL,
+                        durationMinutes INTEGER NOT NULL DEFAULT 30,
+                        status TEXT NOT NULL DEFAULT 'SCHEDULED',
+                        notes TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY (patientId) REFERENCES patients(id) ON DELETE CASCADE,
+                        FOREIGN KEY (dentistId) REFERENCES users(id) ON DELETE SET NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX index_appointments_patientId ON appointments(patientId)")
+                db.execSQL("CREATE INDEX index_appointments_dentistId ON appointments(dentistId)")
+                db.execSQL("CREATE INDEX index_appointments_scheduledAt ON appointments(scheduledAt)")
             }
         }
     }

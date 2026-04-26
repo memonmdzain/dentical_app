@@ -12,8 +12,6 @@ import com.dentical.staff.ui.navigation.Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(onNavigate: (String) -> Unit) {
-    var selectedTab by remember { mutableStateOf(0) }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -29,25 +27,25 @@ fun DashboardScreen(onNavigate: (String) -> Unit) {
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Home, "Dashboard") },
                     label = { Text("Home") },
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 }
+                    selected = true,
+                    onClick = {}
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.CalendarMonth, "Appointments") },
                     label = { Text("Schedule") },
-                    selected = selectedTab == 1,
+                    selected = false,
                     onClick = { onNavigate(Screen.Appointments.route) }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.People, "Patients") },
                     label = { Text("Patients") },
-                    selected = selectedTab == 2,
+                    selected = false,
                     onClick = { onNavigate(Screen.Patients.route) }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Receipt, "Billing") },
                     label = { Text("Billing") },
-                    selected = selectedTab == 3,
+                    selected = false,
                     onClick = { onNavigate(Screen.Billing.route) }
                 )
             }
@@ -61,7 +59,7 @@ fun DashboardScreen(onNavigate: (String) -> Unit) {
         ) {
             Text("Welcome back!", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(8.dp))
-            Text("Dashboard — coming soon",
+            Text("Dashboard coming soon",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

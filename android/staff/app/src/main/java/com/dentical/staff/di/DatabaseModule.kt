@@ -25,11 +25,13 @@ object DatabaseModule {
             DenticalDatabase::class.java,
             "dentical_staff.db"
         )
-        .addMigrations(DenticalDatabase.MIGRATION_1_2)
+        .addMigrations(
+            DenticalDatabase.MIGRATION_1_2,
+            DenticalDatabase.MIGRATION_2_3
+        )
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                // Synchronous insert — runs on the DB thread, no race condition
                 val hash = PasswordUtil.hash("admin123")
                 val now = System.currentTimeMillis()
                 db.execSQL(

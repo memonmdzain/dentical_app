@@ -2,26 +2,20 @@ package com.dentical.staff.data.local
 
 import androidx.room.TypeConverter
 import com.dentical.staff.data.local.entities.AppointmentStatus
+import com.dentical.staff.data.local.entities.AppointmentType
 import com.dentical.staff.data.local.entities.InvoiceStatus
 import com.dentical.staff.data.local.entities.UserRole
 
 class Converters {
-    @TypeConverter
-    fun fromUserRole(role: UserRole): String = role.name
+    @TypeConverter fun fromUserRole(v: UserRole): String = v.name
+    @TypeConverter fun toUserRole(v: String): UserRole = UserRole.valueOf(v)
 
-    @TypeConverter
-    fun toUserRole(role: String): UserRole = UserRole.valueOf(role)
+    @TypeConverter fun fromAppointmentStatus(v: AppointmentStatus): String = v.name
+    @TypeConverter fun toAppointmentStatus(v: String): AppointmentStatus = AppointmentStatus.valueOf(v)
 
-    @TypeConverter
-    fun fromAppointmentStatus(status: AppointmentStatus): String = status.name
+    @TypeConverter fun fromAppointmentType(v: AppointmentType): String = v.name
+    @TypeConverter fun toAppointmentType(v: String): AppointmentType = AppointmentType.valueOf(v)
 
-    @TypeConverter
-    fun toAppointmentStatus(status: String): AppointmentStatus =
-        AppointmentStatus.valueOf(status)
-
-    @TypeConverter
-    fun fromInvoiceStatus(status: InvoiceStatus): String = status.name
-
-    @TypeConverter
-    fun toInvoiceStatus(status: String): InvoiceStatus = InvoiceStatus.valueOf(status)
+    @TypeConverter fun fromInvoiceStatus(v: InvoiceStatus): String = v.name
+    @TypeConverter fun toInvoiceStatus(v: String): InvoiceStatus = InvoiceStatus.valueOf(v)
 }

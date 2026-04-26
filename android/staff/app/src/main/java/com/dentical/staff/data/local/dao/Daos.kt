@@ -12,6 +12,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE isActive = 1")
     fun getAllActiveUsers(): Flow<List<UserEntity>>
 
+    @Query("SELECT * FROM users WHERE role = 'DENTIST' AND isActive = 1 ORDER BY fullName ASC")
+    fun getAllActiveDentists(): Flow<List<UserEntity>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertUser(user: UserEntity): Long
 
@@ -54,17 +57,35 @@ interface PatientDao {
 
 @Dao
 interface AppointmentDao {
-    @Query("SELECT * FROM appointments WHERE scheduledAt >= :startOfDay AND scheduledAt < :endOfDay ORDER BY scheduledAt ASC")
-    fun getAppointmentsByDate(startOfDay: Long, endOfDay: Long): Flow<List<AppointmentEntity>>
+    // List view — all appointments from a date onwards
+    @Query("""
+        SELECT * FROM appointments 
+        WHERE scheduledAt >= :from 
+        ORDER BY scheduledAt ASC
+    """)
+    fun getAppointmentsFrom(from: Long): Flow<List<AppointmentEntity>>
+
+    // Calendar — day view
+    @Query("""
+        SELECT * FROM appointments 
+        WHERE scheduledAt >= :startOfDay AND scheduledAt < :endOfDay 
+        ORDER BY scheduledAt ASC
+    """)
+    fun getAppointmentsByDay(startOfDay: Long, endOfDay: Long): Flow<List<AppointmentEntity>>
+
+    // Calendar — week/month view (count per day)
+    @Query("""
+        SELECT * FROM appointments 
+        WHERE scheduledAt >= :startOfRange AND scheduledAt < :endOfRange 
+        ORDER BY scheduledAt ASC
+    """)
+    fun getAppointmentsByRange(startOfRange: Long, endOfRange: Long): Flow<List<AppointmentEntity>>
 
     @Query("SELECT * FROM appointments WHERE patientId = :patientId ORDER BY scheduledAt DESC")
     fun getAppointmentsByPatient(patientId: Long): Flow<List<AppointmentEntity>>
 
     @Query("SELECT * FROM appointments WHERE id = :id")
     suspend fun getAppointmentById(id: Long): AppointmentEntity?
-
-    @Query("SELECT * FROM appointments WHERE scheduledAt >= :from ORDER BY scheduledAt ASC")
-    fun getUpcomingAppointments(from: Long): Flow<List<AppointmentEntity>>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAppointment(appointment: AppointmentEntity): Long
