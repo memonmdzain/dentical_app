@@ -17,7 +17,7 @@ import com.dentical.staff.data.local.entities.*
         InvoiceEntity::class
     ],
     version = 3,
-    exportSchema = true
+    exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class DenticalDatabase : RoomDatabase() {

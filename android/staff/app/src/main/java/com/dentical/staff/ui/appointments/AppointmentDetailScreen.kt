@@ -158,14 +158,15 @@ fun AppointmentDetailScreen(
             }
 
             // Dentist
-            if (uiState.dentist != null) {
+            val dentist = uiState.dentist
+            if (dentist != null) {
                 Text("Dentist", style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Person, null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text("Dr. ${uiState.dentist.fullName}",
+                    Text("Dr. ${dentist.fullName}",
                         style = MaterialTheme.typography.bodyLarge)
                 }
             }
