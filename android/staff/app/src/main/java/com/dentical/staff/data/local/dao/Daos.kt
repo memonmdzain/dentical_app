@@ -18,9 +18,6 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE role = 'DENTIST' AND isActive = 1 ORDER BY fullName ASC")
     fun getAllActiveDentists(): Flow<List<UserEntity>>
 
-    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
-    suspend fun getUserById(id: Long): UserEntity?
-
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertUser(user: UserEntity): Long
 
@@ -63,8 +60,14 @@ interface PatientDao {
 
 @Dao
 interface AppointmentDao {
-    @Query("SELECT * FROM appointments WHERE scheduledAt >= :start AND scheduledAt < :end ORDER BY scheduledAt ASC")
-    fun getAppointmentsByRange(start: Long, end: Long): Flow<List<AppointmentEntity>>
+    @Query("SELECT * FROM appointments WHERE scheduledAt >= :from ORDER BY scheduledAt ASC")
+    fun getAppointmentsFrom(from: Long): Flow<List<AppointmentEntity>>
+
+    @Query("SELECT * FROM appointments WHERE scheduledAt >= :startOfDay AND scheduledAt < :endOfDay ORDER BY scheduledAt ASC")
+    fun getAppointmentsByDay(startOfDay: Long, endOfDay: Long): Flow<List<AppointmentEntity>>
+
+    @Query("SELECT * FROM appointments WHERE scheduledAt >= :startOfRange AND scheduledAt < :endOfRange ORDER BY scheduledAt ASC")
+    fun getAppointmentsByRange(startOfRange: Long, endOfRange: Long): Flow<List<AppointmentEntity>>
 
     @Query("SELECT * FROM appointments WHERE patientId = :patientId ORDER BY scheduledAt DESC")
     fun getAppointmentsByPatient(patientId: Long): Flow<List<AppointmentEntity>>
