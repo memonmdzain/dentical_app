@@ -1,15 +1,29 @@
 package com.dentical.staff.ui.patients
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dentical.staff.data.local.entities.PatientEntity
+import com.dentical.staff.data.local.entities.TreatmentEntity
+import com.dentical.staff.data.local.entities.TreatmentStatus
+import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
+import com.dentical.staff.data.local.entities.VisitEntity
+import com.dentical.staff.data.repository.PatientFinancialSummary
+import com.dentical.staff.util.PhoneUtil
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -18,9 +32,13 @@ import java.util.*
 fun PatientDetailScreen(
     patientId: Long,
     onBack: () -> Unit,
+    onAddTreatment: () -> Unit,
+    onAddVisit: () -> Unit,
+    onTreatmentClick: (Long) -> Unit,
     viewModel: PatientDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(patientId) { viewModel.loadPatient(patientId) }
 
@@ -65,6 +83,8 @@ fun PatientDetailScreen(
                 if (today.get(Calendar.DAY_OF_YEAR) < dob.get(Calendar.DAY_OF_YEAR)) a--
                 a
             }
+            val outstanding = uiState.financialSummary.totalOutstanding
+            val phone = patient.phone ?: patient.guardianPhone
 
             Column(
                 modifier = Modifier
@@ -80,37 +100,80 @@ fun PatientDetailScreen(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(56.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.primary
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                modifier = Modifier.size(56.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = patient.fullName.first().uppercase(),
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text(patient.fullName,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("ID: ${patient.patientCode} · Age $age · ${patient.gender}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 Text(
-                                    text = patient.fullName.first().uppercase(),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    patient.phone ?: patient.guardianPhone?.let { "Guardian: $it" } ?: "No phone",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                         }
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text(patient.fullName,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text("ID: ${patient.patientCode} · Age $age · ${patient.gender}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(
-                                patient.phone ?: patient.guardianPhone?.let { "Guardian: $it" } ?: "No phone",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer)
+
+                        // Outstanding balance row
+                        if (outstanding > 0) {
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        "Outstanding Balance",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        formatCurrency(outstanding),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                if (phone != null) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            val message = "Dear ${patient.fullName}, you have an outstanding balance of ${formatCurrency(outstanding)} at our clinic. Kindly contact us to settle your dues. Thank you."
+                                            val url = "${PhoneUtil.whatsAppUrl(phone)}?text=${Uri.encode(message)}"
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        },
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = Color(0xFF25D366),
+                                            contentColor = Color.White
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.Send, contentDescription = null,
+                                            modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Remind", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -128,7 +191,16 @@ fun PatientDetailScreen(
 
                 when (uiState.selectedTab) {
                     0 -> OverviewTab(patient = patient, dateFormatter = dateFormatter)
-                    1 -> TreatmentsTab()
+                    1 -> TreatmentsTab(
+                        patient = patient,
+                        treatments = uiState.treatments,
+                        visits = uiState.visits,
+                        visitCrossRefs = uiState.visitCrossRefs,
+                        financialSummary = uiState.financialSummary,
+                        onAddTreatment = onAddTreatment,
+                        onAddVisit = onAddVisit,
+                        onTreatmentClick = onTreatmentClick
+                    )
                     2 -> InvoicesTab()
                 }
             }
@@ -137,15 +209,395 @@ fun PatientDetailScreen(
 }
 
 @Composable
-fun OverviewTab(patient: com.dentical.staff.data.local.entities.PatientEntity,
-                dateFormatter: SimpleDateFormat) {
+fun TreatmentsTab(
+    patient: PatientEntity,
+    treatments: List<TreatmentEntity>,
+    visits: List<VisitEntity>,
+    visitCrossRefs: Map<Long, List<TreatmentVisitCrossRef>>,
+    financialSummary: PatientFinancialSummary,
+    onAddTreatment: () -> Unit,
+    onAddVisit: () -> Unit,
+    onTreatmentClick: (Long) -> Unit
+) {
+    val context = LocalContext.current
+    val dateFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val hasData = treatments.isNotEmpty() || visits.isNotEmpty()
+    val phone = patient.phone ?: patient.guardianPhone
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Financial summary card
+        if (hasData) {
+            item {
+                FinancialSummaryCard(
+                    financialSummary = financialSummary,
+                    patient = patient,
+                    phone = phone,
+                    context = context
+                )
+            }
+        }
+
+        // Action buttons
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onAddVisit,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null,
+                        modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add Visit")
+                }
+                Button(
+                    onClick = onAddTreatment,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null,
+                        modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add Treatment")
+                }
+            }
+        }
+
+        // Visits section
+        if (visits.isNotEmpty()) {
+            item {
+                Text(
+                    "Visits",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            items(visits, key = { it.id }) { visit ->
+                val linkedTreatments = visitCrossRefs[visit.id] ?: emptyList()
+                VisitCard(
+                    visit = visit,
+                    linkedTreatments = linkedTreatments,
+                    allTreatments = treatments,
+                    dateFormatter = dateFormatter
+                )
+            }
+        }
+
+        // Treatment plans section
+        if (treatments.isNotEmpty()) {
+            item {
+                Text(
+                    "Treatment Plans",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            items(treatments, key = { it.id }) { treatment ->
+                TreatmentCard(
+                    treatment = treatment,
+                    dateFormatter = dateFormatter,
+                    onClick = { onTreatmentClick(treatment.id) }
+                )
+            }
+        }
+
+        // Empty state
+        if (!hasData) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No treatments or visits yet",
+                        color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinancialSummaryCard(
+    financialSummary: PatientFinancialSummary,
+    patient: PatientEntity,
+    phone: String?,
+    context: android.content.Context
+) {
+    val totalBilled = financialSummary.totalQuoted + financialSummary.standaloneCharged
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "Financial Summary",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                FinancialFigure(
+                    label = "Total Billed",
+                    amount = totalBilled,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FinancialFigure(
+                    label = "Paid",
+                    amount = financialSummary.totalPaid,
+                    color = Color(0xFF2E7D32)
+                )
+                FinancialFigure(
+                    label = "Outstanding",
+                    amount = financialSummary.totalOutstanding,
+                    color = if (financialSummary.totalOutstanding > 0)
+                        MaterialTheme.colorScheme.error
+                    else Color(0xFF2E7D32)
+                )
+            }
+
+            if (financialSummary.totalOutstanding > 0 && phone != null) {
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = {
+                        val message = "Dear ${patient.fullName}, you have an outstanding balance of ${formatCurrency(financialSummary.totalOutstanding)} at our clinic. Kindly contact us to settle your dues. Thank you."
+                        val url = "${PhoneUtil.whatsAppUrl(phone)}?text=${Uri.encode(message)}"
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF25D366)
+                    )
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = null,
+                        modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Send Payment Reminder via WhatsApp")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinancialFigure(label: String, amount: Double, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            formatCurrency(amount),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun VisitCard(
+    visit: VisitEntity,
+    linkedTreatments: List<TreatmentVisitCrossRef>,
+    allTreatments: List<TreatmentEntity>,
+    dateFormatter: SimpleDateFormat
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    dateFormatter.format(Date(visit.visitDate)),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (visit.amountPaid > 0) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = Color(0xFFE8F5E9)
+                    ) {
+                        Text(
+                            "Paid ${formatCurrency(visit.amountPaid)}",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF2E7D32),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+            Text(
+                "By ${visit.performedBy}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (linkedTreatments.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                linkedTreatments.forEach { crossRef ->
+                    val treatment = allTreatments.find { it.id == crossRef.treatmentId }
+                    if (treatment != null) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Text(
+                                "· ${treatment.procedure.displayName}${treatment.toothNumber?.let { " (#$it)" } ?: ""}: ",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                crossRef.workDone,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (visit.costCharged > 0) "Charged ${formatCurrency(visit.costCharged)}"
+                    else "No treatments linked",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!visit.notes.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    visit.notes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TreatmentCard(
+    treatment: TreatmentEntity,
+    dateFormatter: SimpleDateFormat,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        treatment.procedure.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (!treatment.toothNumber.isNullOrBlank()) {
+                        Text(
+                            "Tooth #${treatment.toothNumber}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                TreatmentStatusBadge(treatment.status)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Started ${dateFormatter.format(Date(treatment.startDate))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (treatment.quotedCost != null) {
+                    Text(
+                        "Quoted ${formatCurrency(treatment.quotedCost)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (treatment.visitsRequired != null) {
+                Text(
+                    "Est. ${treatment.visitsRequired} visit(s) required",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TreatmentStatusBadge(status: TreatmentStatus) {
+    val (bgColor, textColor, label) = when (status) {
+        TreatmentStatus.ONGOING -> Triple(
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            "Ongoing"
+        )
+        TreatmentStatus.COMPLETED -> Triple(
+            Color(0xFFE8F5E9),
+            Color(0xFF2E7D32),
+            "Completed"
+        )
+        TreatmentStatus.CANCELLED -> Triple(
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+            "Cancelled"
+        )
+    }
+    Surface(shape = MaterialTheme.shapes.small, color = bgColor) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+private fun formatCurrency(amount: Double): String {
+    val fmt = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+    fmt.maximumFractionDigits = 0
+    return fmt.format(amount)
+}
+
+@Composable
+fun OverviewTab(patient: PatientEntity, dateFormatter: SimpleDateFormat) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        DetailRow("Date of Birth", java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(patient.dateOfBirth)))
+        DetailRow("Date of Birth", SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(patient.dateOfBirth)))
         if (patient.guardianName != null) DetailRow("Guardian", patient.guardianName)
         if (patient.guardianPhone != null) DetailRow("Guardian Phone", patient.guardianPhone)
         DetailRow("Referral", if (patient.referralDetail != null) "${patient.referralSource} — ${patient.referralDetail}" else patient.referralSource)
@@ -163,13 +615,6 @@ fun DetailRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyLarge)
         HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-    }
-}
-
-@Composable
-fun TreatmentsTab() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Treatments coming soon", color = MaterialTheme.colorScheme.outline)
     }
 }
 

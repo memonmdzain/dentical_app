@@ -11,6 +11,7 @@ import com.dentical.staff.ui.appointments.*
 import com.dentical.staff.ui.dashboard.DashboardScreen
 import com.dentical.staff.ui.login.LoginScreen
 import com.dentical.staff.ui.patients.*
+import com.dentical.staff.ui.treatments.*
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
@@ -27,6 +28,17 @@ sealed class Screen(val route: String) {
     }
     object EditAppointment : Screen("appointments/{appointmentId}/edit") {
         fun createRoute(id: Long) = "appointments/$id/edit"
+    }
+    object AddTreatment : Screen("patients/{patientId}/treatments/new") {
+        fun createRoute(patientId: Long) = "patients/$patientId/treatments/new"
+    }
+    object TreatmentDetail : Screen("patients/{patientId}/treatments/{treatmentId}") {
+        fun createRoute(patientId: Long, treatmentId: Long) =
+            "patients/$patientId/treatments/$treatmentId"
+    }
+    object AddVisit : Screen("patients/{patientId}/visits/new?preSelectedTreatmentId={preSelectedTreatmentId}") {
+        fun createRoute(patientId: Long, preSelectedTreatmentId: Long = -1L) =
+            "patients/$patientId/visits/new?preSelectedTreatmentId=$preSelectedTreatmentId"
     }
     object Billing : Screen("billing")
     object Reminders : Screen("reminders")
@@ -67,8 +79,20 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             route = Screen.PatientDetail.route,
             arguments = listOf(navArgument("patientId") { type = NavType.LongType })
         ) {
-            val id = it.arguments?.getLong("patientId") ?: return@composable
-            PatientDetailScreen(patientId = id, onBack = { navController.popBackStack() })
+            val patientId = it.arguments?.getLong("patientId") ?: return@composable
+            PatientDetailScreen(
+                patientId = patientId,
+                onBack = { navController.popBackStack() },
+                onAddTreatment = {
+                    navController.navigate(Screen.AddTreatment.createRoute(patientId))
+                },
+                onAddVisit = {
+                    navController.navigate(Screen.AddVisit.createRoute(patientId))
+                },
+                onTreatmentClick = { treatmentId ->
+                    navController.navigate(Screen.TreatmentDetail.createRoute(patientId, treatmentId))
+                }
+            )
         }
 
         // Appointments
@@ -103,6 +127,57 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             val id = it.arguments?.getLong("appointmentId") ?: return@composable
             EditAppointmentScreen(
                 appointmentId = id,
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Treatments
+        composable(
+            route = Screen.AddTreatment.route,
+            arguments = listOf(navArgument("patientId") { type = NavType.LongType })
+        ) {
+            val patientId = it.arguments?.getLong("patientId") ?: return@composable
+            AddTreatmentScreen(
+                patientId = patientId,
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.TreatmentDetail.route,
+            arguments = listOf(
+                navArgument("patientId") { type = NavType.LongType },
+                navArgument("treatmentId") { type = NavType.LongType }
+            )
+        ) {
+            val patientId = it.arguments?.getLong("patientId") ?: return@composable
+            val treatmentId = it.arguments?.getLong("treatmentId") ?: return@composable
+            TreatmentDetailScreen(
+                treatmentId = treatmentId,
+                onBack = { navController.popBackStack() },
+                onAddVisit = {
+                    navController.navigate(
+                        Screen.AddVisit.createRoute(patientId, treatmentId)
+                    )
+                }
+            )
+        }
+        composable(
+            route = Screen.AddVisit.route,
+            arguments = listOf(
+                navArgument("patientId") { type = NavType.LongType },
+                navArgument("preSelectedTreatmentId") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) {
+            val patientId = it.arguments?.getLong("patientId") ?: return@composable
+            val preSelected = it.arguments?.getLong("preSelectedTreatmentId") ?: -1L
+            AddVisitScreen(
+                patientId = patientId,
+                preSelectedTreatmentId = preSelected,
                 onSaved = { navController.popBackStack() },
                 onBack = { navController.popBackStack() }
             )
