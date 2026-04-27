@@ -3,7 +3,6 @@ package com.dentical.staff.ui.appointments
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.*
-import com.dentical.staff.data.local.dao.UserDao
 import com.dentical.staff.data.repository.AppointmentRepository
 import com.dentical.staff.data.repository.PatientRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,8 +20,7 @@ data class AppointmentDetailUiState(
 @HiltViewModel
 class AppointmentDetailViewModel @Inject constructor(
     private val appointmentRepository: AppointmentRepository,
-    private val patientRepository: PatientRepository,
-    private val userDao: UserDao
+    private val patientRepository: PatientRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppointmentDetailUiState())
@@ -33,7 +31,7 @@ class AppointmentDetailViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val appt = appointmentRepository.getAppointmentById(id)
             val patient = appt?.let { patientRepository.getPatientById(it.patientId) }
-            val dentist = appt?.dentistId?.let { userDao.getUserById(it) }
+            val dentist = appt?.dentistId?.let { appointmentRepository.getDentistById(it) }
             _uiState.update { it.copy(
                 appointment = appt,
                 patient = patient,
