@@ -25,6 +25,9 @@ sealed class Screen(val route: String) {
     object AppointmentDetail : Screen("appointments/{appointmentId}") {
         fun createRoute(id: Long) = "appointments/$id"
     }
+    object EditAppointment : Screen("appointments/{appointmentId}/edit") {
+        fun createRoute(id: Long) = "appointments/$id/edit"
+    }
     object Billing : Screen("billing")
     object Reminders : Screen("reminders")
     object Settings : Screen("settings")
@@ -87,7 +90,22 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             arguments = listOf(navArgument("appointmentId") { type = NavType.LongType })
         ) {
             val id = it.arguments?.getLong("appointmentId") ?: return@composable
-            AppointmentDetailScreen(appointmentId = id, onBack = { navController.popBackStack() })
+            AppointmentDetailScreen(
+                appointmentId = id,
+                onBack = { navController.popBackStack() },
+                onEdit = { navController.navigate(Screen.EditAppointment.createRoute(it)) }
+            )
+        }
+        composable(
+            route = Screen.EditAppointment.route,
+            arguments = listOf(navArgument("appointmentId") { type = NavType.LongType })
+        ) {
+            val id = it.arguments?.getLong("appointmentId") ?: return@composable
+            EditAppointmentScreen(
+                appointmentId = id,
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }

@@ -33,7 +33,7 @@ class AppointmentDetailViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val appt = appointmentRepository.getAppointmentById(id)
             val patient = appt?.let { patientRepository.getPatientById(it.patientId) }
-            val dentist = appt?.dentistId?.let { userDao.getUserByUsername("") }
+            val dentist = appt?.dentistId?.let { userDao.getUserById(it) }
             _uiState.update { it.copy(
                 appointment = appt,
                 patient = patient,

@@ -25,6 +25,7 @@ import java.util.*
 fun AppointmentDetailScreen(
     appointmentId: Long,
     onBack: () -> Unit,
+    onEdit: (Long) -> Unit,
     viewModel: AppointmentDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -54,6 +55,18 @@ fun AppointmentDetailScreen(
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
+                actions = {
+                    val appt = uiState.appointment
+                    val canEdit = appt != null && appt.status != AppointmentStatus.COMPLETED
+                            && appt.status != AppointmentStatus.CANCELLED
+                            && appt.status != AppointmentStatus.NO_SHOW
+                    if (canEdit) {
+                        IconButton(onClick = { onEdit(appointmentId) }) {
+                            Icon(Icons.Default.Edit, "Edit",
+                                tint = MaterialTheme.colorScheme.onPrimary)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -80,7 +93,7 @@ fun AppointmentDetailScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Status badge + type
+            // Status + type
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -92,7 +105,6 @@ fun AppointmentDetailScreen(
                 StatusBadge(appt.status)
             }
 
-            // Date & time
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.AccessTime, null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -125,10 +137,7 @@ fun AppointmentDetailScreen(
                     Text("ID: ${uiState.patient?.patientCode ?: "-"}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-
                     Spacer(Modifier.height(12.dp))
-
-                    // Call & WhatsApp buttons
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = { dial() },

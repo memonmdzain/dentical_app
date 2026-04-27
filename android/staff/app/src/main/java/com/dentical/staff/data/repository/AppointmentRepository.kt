@@ -6,7 +6,6 @@ import com.dentical.staff.data.local.entities.AppointmentEntity
 import com.dentical.staff.data.local.entities.AppointmentStatus
 import com.dentical.staff.data.local.entities.UserEntity
 import kotlinx.coroutines.flow.Flow
-import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,20 +14,8 @@ class AppointmentRepository @Inject constructor(
     private val appointmentDao: AppointmentDao,
     private val userDao: UserDao
 ) {
-    fun getAppointmentsFrom(from: Long): Flow<List<AppointmentEntity>> =
-        appointmentDao.getAppointmentsFrom(from)
-
-    fun getAppointmentsByDay(dateMillis: Long): Flow<List<AppointmentEntity>> {
-        val cal = Calendar.getInstance().apply { timeInMillis = dateMillis }
-        cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-        val start = cal.timeInMillis
-        val end = start + 86_400_000L
-        return appointmentDao.getAppointmentsByDay(start, end)
-    }
-
-    fun getAppointmentsByRange(startMillis: Long, endMillis: Long): Flow<List<AppointmentEntity>> =
-        appointmentDao.getAppointmentsByRange(startMillis, endMillis)
+    fun getAppointmentsByRange(start: Long, end: Long): Flow<List<AppointmentEntity>> =
+        appointmentDao.getAppointmentsByRange(start, end)
 
     fun getAppointmentsByPatient(patientId: Long): Flow<List<AppointmentEntity>> =
         appointmentDao.getAppointmentsByPatient(patientId)
@@ -38,6 +25,9 @@ class AppointmentRepository @Inject constructor(
 
     suspend fun getAppointmentById(id: Long): AppointmentEntity? =
         appointmentDao.getAppointmentById(id)
+
+    suspend fun getDentistById(id: Long): UserEntity? =
+        userDao.getUserById(id)
 
     suspend fun addAppointment(appointment: AppointmentEntity): Long =
         appointmentDao.insertAppointment(appointment)
