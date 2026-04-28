@@ -271,13 +271,7 @@ fun TreatmentsTab(
         // Visits section
         if (visits.isNotEmpty()) {
             item {
-                Text(
-                    "Visits",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                SectionHeader("Visits (${visits.size})", modifier = Modifier.padding(top = 4.dp))
             }
             items(visits, key = { it.id }) { visit ->
                 val linkedTreatments = visitCrossRefs[visit.id] ?: emptyList()
@@ -290,18 +284,28 @@ fun TreatmentsTab(
             }
         }
 
-        // Treatment plans section
-        if (treatments.isNotEmpty()) {
+        // Ongoing treatments section
+        val ongoingTreatments = treatments.filter { it.status == TreatmentStatus.ONGOING }
+        if (ongoingTreatments.isNotEmpty()) {
             item {
-                Text(
-                    "Treatment Plans",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
+                SectionHeader("Ongoing Treatments (${ongoingTreatments.size})", modifier = Modifier.padding(top = 4.dp))
+            }
+            items(ongoingTreatments, key = { it.id }) { treatment ->
+                TreatmentCard(
+                    treatment = treatment,
+                    dateFormatter = dateFormatter,
+                    onClick = { onTreatmentClick(treatment.id) }
                 )
             }
-            items(treatments, key = { it.id }) { treatment ->
+        }
+
+        // Past treatments section (Completed + Cancelled)
+        val pastTreatments = treatments.filter { it.status != TreatmentStatus.ONGOING }
+        if (pastTreatments.isNotEmpty()) {
+            item {
+                SectionHeader("Past Treatments (${pastTreatments.size})", modifier = Modifier.padding(top = 4.dp))
+            }
+            items(pastTreatments, key = { it.id }) { treatment ->
                 TreatmentCard(
                     treatment = treatment,
                     dateFormatter = dateFormatter,
@@ -325,6 +329,17 @@ fun TreatmentsTab(
             }
         }
     }
+}
+
+@Composable
+private fun SectionHeader(title: String, modifier: Modifier = Modifier) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+    )
 }
 
 @Composable

@@ -31,6 +31,7 @@ object DatabaseModule {
             DenticalDatabase.MIGRATION_3_4,
             DenticalDatabase.MIGRATION_4_5
         )
+        .fallbackToDestructiveMigration()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
