@@ -9,6 +9,7 @@ import com.dentical.staff.data.local.entities.VisitEntity
 import com.dentical.staff.data.repository.AppointmentRepository
 import com.dentical.staff.data.repository.TreatmentRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -146,6 +147,7 @@ class AddVisitViewModel @Inject constructor(
                 treatmentRepository.addVisit(visit, treatmentLinks)
                 _uiState.update { it.copy(isSaving = false, saved = true) }
             } catch (e: Throwable) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(isSaving = false, error = "${e.javaClass.simpleName}: ${e.message}") }
             }
         }
