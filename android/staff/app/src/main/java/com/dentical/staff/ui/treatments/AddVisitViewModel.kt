@@ -9,6 +9,7 @@ import com.dentical.staff.data.local.entities.VisitEntity
 import com.dentical.staff.data.repository.AppointmentRepository
 import com.dentical.staff.data.repository.TreatmentRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,14 +56,18 @@ class AddVisitViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AddVisitUiState())
     val uiState: StateFlow<AddVisitUiState> = _uiState.asStateFlow()
 
+    private val loadErrorHandler = CoroutineExceptionHandler { _, throwable ->
+        _uiState.update { it.copy(error = "Load error: ${throwable.javaClass.simpleName}: ${throwable.message}") }
+    }
+
     fun load(patientId: Long, preSelectedTreatmentId: Long) {
-        viewModelScope.launch {
+        viewModelScope.launch(loadErrorHandler) {
             appointmentRepository.getAllActiveDentists().collect { dentists ->
                 _uiState.update { it.copy(dentists = dentists) }
             }
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(loadErrorHandler) {
             treatmentRepository.getOngoingTreatmentsByPatient(patientId).collect { treatments ->
                 _uiState.update { state ->
                     val selections = treatments.map { treatment ->
@@ -141,7 +146,7 @@ class AddVisitViewModel @Inject constructor(
                 treatmentRepository.addVisit(visit, treatmentLinks)
                 _uiState.update { it.copy(isSaving = false, saved = true) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false, error = "Failed to save visit") }
+                _uiState.update { it.copy(isSaving = false, error = "${e.javaClass.simpleName}: ${e.message}") }
             }
         }
     }

@@ -10,6 +10,7 @@ import com.dentical.staff.data.repository.PatientFinancialSummary
 import com.dentical.staff.data.repository.PatientRepository
 import com.dentical.staff.data.repository.TreatmentRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +26,8 @@ data class PatientDetailUiState(
     val treatments: List<TreatmentEntity> = emptyList(),
     val visits: List<VisitEntity> = emptyList(),
     val visitCrossRefs: Map<Long, List<TreatmentVisitCrossRef>> = emptyMap(),
-    val financialSummary: PatientFinancialSummary = PatientFinancialSummary(0.0, 0.0, 0.0, 0.0)
+    val financialSummary: PatientFinancialSummary = PatientFinancialSummary(0.0, 0.0, 0.0, 0.0),
+    val error: String? = null
 )
 
 @HiltViewModel
@@ -38,6 +40,10 @@ class PatientDetailViewModel @Inject constructor(
     val uiState: StateFlow<PatientDetailUiState> = _uiState.asStateFlow()
 
     private var loadedPatientId = -1L
+
+    private val errorHandler = CoroutineExceptionHandler { _, throwable ->
+        _uiState.update { it.copy(error = "${throwable.javaClass.simpleName}: ${throwable.message}") }
+    }
 
     fun loadPatient(id: Long) {
         if (loadedPatientId == id) return
@@ -53,17 +59,17 @@ class PatientDetailViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             treatmentRepository.getTreatmentsByPatient(id)
-                .catch { /* ignore — show empty list */ }
+                .catch { e -> _uiState.update { it.copy(error = "treatments: ${e.javaClass.simpleName}: ${e.message}") } }
                 .collect { treatments ->
                     _uiState.update { it.copy(treatments = treatments) }
                 }
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             treatmentRepository.getVisitsByPatient(id)
-                .catch { /* ignore — show empty list */ }
+                .catch { e -> _uiState.update { it.copy(error = "visits: ${e.javaClass.simpleName}: ${e.message}") } }
                 .collect { visits ->
                     val crossRefMap = mutableMapOf<Long, List<TreatmentVisitCrossRef>>()
                     try {
@@ -71,15 +77,18 @@ class PatientDetailViewModel @Inject constructor(
                             crossRefMap[visit.id] = treatmentRepository.getCrossRefsForVisit(visit.id)
                         }
                     } catch (e: Exception) {
-                        // crossRef lookup failed — show visits without linked treatment detail
+                        _uiState.update { it.copy(error = "crossRefs: ${e.javaClass.simpleName}: ${e.message}") }
                     }
                     _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap) }
                 }
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             treatmentRepository.getPatientFinancialSummary(id)
-                .catch { emit(PatientFinancialSummary(0.0, 0.0, 0.0, 0.0)) }
+                .catch { e ->
+                    _uiState.update { it.copy(error = "financial: ${e.javaClass.simpleName}: ${e.message}") }
+                    emit(PatientFinancialSummary(0.0, 0.0, 0.0, 0.0))
+                }
                 .collect { summary ->
                     _uiState.update { it.copy(financialSummary = summary) }
                 }

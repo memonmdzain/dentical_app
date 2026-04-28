@@ -189,6 +189,25 @@ fun PatientDetailScreen(
                     }
                 }
 
+                // Debug error banner — remove before launch
+                uiState.error?.let { errorMsg ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            "ERROR: $errorMsg",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+
                 when (uiState.selectedTab) {
                     0 -> OverviewTab(patient = patient, dateFormatter = dateFormatter)
                     1 -> TreatmentsTab(
