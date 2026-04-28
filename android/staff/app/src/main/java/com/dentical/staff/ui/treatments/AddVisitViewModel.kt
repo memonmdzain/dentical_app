@@ -145,7 +145,7 @@ class AddVisitViewModel @Inject constructor(
                 }
                 treatmentRepository.addVisit(visit, treatmentLinks)
                 _uiState.update { it.copy(isSaving = false, saved = true) }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 _uiState.update { it.copy(isSaving = false, error = "${e.javaClass.simpleName}: ${e.message}") }
             }
         }
