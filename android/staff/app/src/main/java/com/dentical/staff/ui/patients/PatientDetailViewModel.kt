@@ -13,6 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -44,30 +45,44 @@ class PatientDetailViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val patient = patientRepository.getPatientById(id)
-            _uiState.update { it.copy(patient = patient, isLoading = false) }
-        }
-
-        viewModelScope.launch {
-            treatmentRepository.getTreatmentsByPatient(id).collect { treatments ->
-                _uiState.update { it.copy(treatments = treatments) }
+            try {
+                val patient = patientRepository.getPatientById(id)
+                _uiState.update { it.copy(patient = patient, isLoading = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
 
         viewModelScope.launch {
-            treatmentRepository.getVisitsByPatient(id).collect { visits ->
-                val crossRefMap = mutableMapOf<Long, List<TreatmentVisitCrossRef>>()
-                visits.forEach { visit ->
-                    crossRefMap[visit.id] = treatmentRepository.getCrossRefsForVisit(visit.id)
+            treatmentRepository.getTreatmentsByPatient(id)
+                .catch { /* ignore — show empty list */ }
+                .collect { treatments ->
+                    _uiState.update { it.copy(treatments = treatments) }
                 }
-                _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap) }
-            }
         }
 
         viewModelScope.launch {
-            treatmentRepository.getPatientFinancialSummary(id).collect { summary ->
-                _uiState.update { it.copy(financialSummary = summary) }
-            }
+            treatmentRepository.getVisitsByPatient(id)
+                .catch { /* ignore — show empty list */ }
+                .collect { visits ->
+                    val crossRefMap = mutableMapOf<Long, List<TreatmentVisitCrossRef>>()
+                    try {
+                        visits.forEach { visit ->
+                            crossRefMap[visit.id] = treatmentRepository.getCrossRefsForVisit(visit.id)
+                        }
+                    } catch (e: Exception) {
+                        // crossRef lookup failed — show visits without linked treatment detail
+                    }
+                    _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap) }
+                }
+        }
+
+        viewModelScope.launch {
+            treatmentRepository.getPatientFinancialSummary(id)
+                .catch { emit(PatientFinancialSummary(0.0, 0.0, 0.0, 0.0)) }
+                .collect { summary ->
+                    _uiState.update { it.copy(financialSummary = summary) }
+                }
         }
     }
 

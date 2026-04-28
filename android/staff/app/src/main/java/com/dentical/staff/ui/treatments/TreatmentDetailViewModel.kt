@@ -13,6 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -44,15 +45,19 @@ class TreatmentDetailViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            treatmentRepository.getVisitsByTreatment(treatmentId).collect { visits ->
-                _uiState.update { it.copy(visits = visits, visitCount = visits.size) }
-            }
+            treatmentRepository.getVisitsByTreatment(treatmentId)
+                .catch { /* ignore — show empty list */ }
+                .collect { visits ->
+                    _uiState.update { it.copy(visits = visits, visitCount = visits.size) }
+                }
         }
 
         viewModelScope.launch {
-            treatmentRepository.getCrossRefsForTreatment(treatmentId).collect { crossRefs ->
-                _uiState.update { it.copy(crossRefs = crossRefs) }
-            }
+            treatmentRepository.getCrossRefsForTreatment(treatmentId)
+                .catch { /* ignore */ }
+                .collect { crossRefs ->
+                    _uiState.update { it.copy(crossRefs = crossRefs) }
+                }
         }
     }
 

@@ -18,7 +18,7 @@ import com.dentical.staff.data.local.entities.*
         TreatmentVisitCrossRef::class,
         InvoiceEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -145,6 +145,66 @@ abstract class DenticalDatabase : RoomDatabase() {
 
         // Fixes schema mismatch from 3→4 (removed SQL DEFAULTs) and adds paymentMode to visits
         val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS treatment_visit_cross_ref")
+                db.execSQL("DROP TABLE IF EXISTS visits")
+                db.execSQL("DROP TABLE IF EXISTS treatments")
+
+                db.execSQL("""
+                    CREATE TABLE treatments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        patientId INTEGER NOT NULL,
+                        dentistId INTEGER,
+                        procedure TEXT NOT NULL,
+                        toothNumber TEXT,
+                        description TEXT,
+                        quotedCost REAL,
+                        visitsRequired INTEGER,
+                        status TEXT NOT NULL,
+                        startDate INTEGER NOT NULL,
+                        completedDate INTEGER,
+                        notes TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY (patientId) REFERENCES patients(id) ON DELETE CASCADE,
+                        FOREIGN KEY (dentistId) REFERENCES users(id) ON DELETE SET NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX index_treatments_patientId ON treatments(patientId)")
+                db.execSQL("CREATE INDEX index_treatments_dentistId ON treatments(dentistId)")
+
+                db.execSQL("""
+                    CREATE TABLE visits (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        patientId INTEGER NOT NULL,
+                        visitDate INTEGER NOT NULL,
+                        performedBy TEXT NOT NULL,
+                        amountPaid REAL NOT NULL,
+                        costCharged REAL NOT NULL,
+                        paymentMode TEXT,
+                        notes TEXT,
+                        createdAt INTEGER NOT NULL,
+                        FOREIGN KEY (patientId) REFERENCES patients(id) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX index_visits_patientId ON visits(patientId)")
+
+                db.execSQL("""
+                    CREATE TABLE treatment_visit_cross_ref (
+                        treatmentId INTEGER NOT NULL,
+                        visitId INTEGER NOT NULL,
+                        workDone TEXT NOT NULL,
+                        PRIMARY KEY (treatmentId, visitId),
+                        FOREIGN KEY (treatmentId) REFERENCES treatments(id) ON DELETE CASCADE,
+                        FOREIGN KEY (visitId) REFERENCES visits(id) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX index_treatment_visit_cross_ref_visitId ON treatment_visit_cross_ref(visitId)")
+            }
+        }
+
+        // Force clean slate for any device that has a broken version-5 schema
+        val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP TABLE IF EXISTS treatment_visit_cross_ref")
                 db.execSQL("DROP TABLE IF EXISTS visits")

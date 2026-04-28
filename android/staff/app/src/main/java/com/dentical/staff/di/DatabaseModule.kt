@@ -29,7 +29,8 @@ object DatabaseModule {
             DenticalDatabase.MIGRATION_1_2,
             DenticalDatabase.MIGRATION_2_3,
             DenticalDatabase.MIGRATION_3_4,
-            DenticalDatabase.MIGRATION_4_5
+            DenticalDatabase.MIGRATION_4_5,
+            DenticalDatabase.MIGRATION_5_6
         )
         .fallbackToDestructiveMigration()
         .addCallback(object : RoomDatabase.Callback() {

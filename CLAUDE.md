@@ -146,12 +146,13 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 
 ## Database
 
-- Version: 5, exportSchema: false
+- Version: 6, exportSchema: false
 - `fallbackToDestructiveMigration()` enabled — wipes DB if no migration path found (dev phase only; remove before launch)
 - Migration 1→2: patients table rebuilt
 - Migration 2→3: appointments table rebuilt with type + dentistId
 - Migration 3→4: treatments + visits + treatment_visit_cross_ref tables added
 - Migration 4→5: tables recreated without SQL DEFAULT clauses (Room schema fix) + paymentMode column on visits
+- Migration 5→6: force clean slate for any device with a broken version-5 schema (same drop+recreate)
 
 ---
 
