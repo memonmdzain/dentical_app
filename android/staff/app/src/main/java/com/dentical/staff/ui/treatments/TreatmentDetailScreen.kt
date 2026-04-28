@@ -312,8 +312,12 @@ private fun TreatmentVisitCard(
                         shape = MaterialTheme.shapes.small,
                         color = Color(0xFFE8F5E9)
                     ) {
+                        val paidLabel = buildString {
+                            append("Paid ${formatCurrency(visit.amountPaid)}")
+                            visit.paymentMode?.let { append(" via ${it.displayName}") }
+                        }
                         Text(
-                            "Paid ${formatCurrency(visit.amountPaid)}",
+                            paidLabel,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFF2E7D32),

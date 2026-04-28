@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.dentical.staff.data.local.entities.PaymentMode
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -41,6 +42,7 @@ fun AddVisitScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showDentistPicker by remember { mutableStateOf(false) }
+    var showPaymentModePicker by remember { mutableStateOf(false) }
     val dateFormatter = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
     val hasSelectedTreatments = uiState.treatmentSelections.any { it.isSelected }
@@ -171,6 +173,44 @@ fun AddVisitScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
+
+            // Payment mode
+            ExposedDropdownMenuBox(
+                expanded = showPaymentModePicker,
+                onExpandedChange = { showPaymentModePicker = it }
+            ) {
+                OutlinedTextField(
+                    value = uiState.paymentMode?.displayName ?: "Select Payment Mode",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Payment Mode") },
+                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = showPaymentModePicker,
+                    onDismissRequest = { showPaymentModePicker = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            viewModel.onPaymentModeChange(null)
+                            showPaymentModePicker = false
+                        }
+                    )
+                    PaymentMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.displayName) },
+                            onClick = {
+                                viewModel.onPaymentModeChange(mode)
+                                showPaymentModePicker = false
+                            }
+                        )
+                    }
+                }
+            }
 
             // Notes
             OutlinedTextField(

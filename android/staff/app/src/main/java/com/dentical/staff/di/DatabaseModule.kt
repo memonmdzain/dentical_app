@@ -28,7 +28,8 @@ object DatabaseModule {
         .addMigrations(
             DenticalDatabase.MIGRATION_1_2,
             DenticalDatabase.MIGRATION_2_3,
-            DenticalDatabase.MIGRATION_3_4
+            DenticalDatabase.MIGRATION_3_4,
+            DenticalDatabase.MIGRATION_4_5
         )
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

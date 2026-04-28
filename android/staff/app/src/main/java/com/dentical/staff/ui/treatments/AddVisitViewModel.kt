@@ -2,6 +2,7 @@ package com.dentical.staff.ui.treatments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dentical.staff.data.local.entities.PaymentMode
 import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.UserEntity
 import com.dentical.staff.data.local.entities.VisitEntity
@@ -26,6 +27,7 @@ data class AddVisitUiState(
     val visitDateMillis: Long = todayMillis(),
     val selectedDentistId: Long? = null,
     val amountPaid: String = "",
+    val paymentMode: PaymentMode? = null,
     val costCharged: String = "",
     val notes: String = "",
     val treatmentSelections: List<TreatmentSelection> = emptyList(),
@@ -80,6 +82,7 @@ class AddVisitViewModel @Inject constructor(
     fun onVisitDateChange(millis: Long) = _uiState.update { it.copy(visitDateMillis = millis) }
     fun onDentistSelected(id: Long?) = _uiState.update { it.copy(selectedDentistId = id) }
     fun onAmountPaidChange(v: String) = _uiState.update { it.copy(amountPaid = v) }
+    fun onPaymentModeChange(mode: PaymentMode?) = _uiState.update { it.copy(paymentMode = mode) }
     fun onCostChargedChange(v: String) = _uiState.update { it.copy(costCharged = v) }
     fun onNotesChange(v: String) = _uiState.update { it.copy(notes = v) }
 
@@ -127,6 +130,7 @@ class AddVisitViewModel @Inject constructor(
                     visitDate = state.visitDateMillis,
                     performedBy = dentistName,
                     amountPaid = state.amountPaid.toDoubleOrNull() ?: 0.0,
+                    paymentMode = state.paymentMode,
                     costCharged = if (isStandalone) state.costCharged.toDoubleOrNull() ?: 0.0 else 0.0,
                     notes = state.notes.trim().ifBlank { null },
                     createdAt = System.currentTimeMillis()

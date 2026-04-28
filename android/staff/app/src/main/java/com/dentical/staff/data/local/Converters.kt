@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.dentical.staff.data.local.entities.AppointmentStatus
 import com.dentical.staff.data.local.entities.AppointmentType
 import com.dentical.staff.data.local.entities.InvoiceStatus
+import com.dentical.staff.data.local.entities.PaymentMode
 import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.UserRole
 
@@ -22,4 +23,7 @@ class Converters {
 
     @TypeConverter fun fromTreatmentStatus(v: TreatmentStatus): String = v.name
     @TypeConverter fun toTreatmentStatus(v: String): TreatmentStatus = TreatmentStatus.valueOf(v)
+
+    @TypeConverter fun fromPaymentMode(v: PaymentMode?): String? = v?.name
+    @TypeConverter fun toPaymentMode(v: String?): PaymentMode? = v?.let { PaymentMode.valueOf(it) }
 }

@@ -7,6 +7,12 @@ import androidx.room.PrimaryKey
 
 enum class TreatmentStatus { ONGOING, COMPLETED, CANCELLED }
 
+enum class PaymentMode(val displayName: String) {
+    CASH("Cash"),
+    GPAY("GPay"),
+    BANK_TRANSFER("Bank Transfer")
+}
+
 @Entity(
     tableName = "treatments",
     foreignKeys = [
@@ -63,6 +69,7 @@ data class VisitEntity(
     val performedBy: String,
     val amountPaid: Double = 0.0,
     val costCharged: Double = 0.0,
+    val paymentMode: PaymentMode? = null,
     val notes: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
