@@ -86,14 +86,11 @@ class TreatmentDetailViewModel @Inject constructor(
     fun openCancelDialog() {
         val treatment = _uiState.value.treatment ?: return
         viewModelScope.launch {
-            val chargeStr = treatment.quotedCost
-                ?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: ""
-            val chargeVal = treatment.quotedCost ?: 0.0
-            val balance = treatmentRepository.computeCancellationBalance(treatment.id, chargeVal)
+            val balance = treatmentRepository.computeCancellationBalance(treatment.id, 0.0)
             _uiState.update {
                 it.copy(
                     showCancelDialog = true,
-                    cancelPartialCharge = chargeStr,
+                    cancelPartialCharge = "",
                     cancelBalance = balance,
                     cancelConfirmRefundDone = false,
                     error = null
@@ -151,6 +148,11 @@ class TreatmentDetailViewModel @Inject constructor(
                     ),
                     listOf(treatment.id to "Refund")
                 )
+                val refreshedVisits = treatmentRepository.getVisitsByTreatmentOnce(treatment.id)
+                val refreshedCrossRefs = treatmentRepository.getCrossRefsForTreatmentOnce(treatment.id)
+                _uiState.update {
+                    it.copy(visits = refreshedVisits, visitCount = refreshedVisits.size, crossRefs = refreshedCrossRefs)
+                }
             }
             val updated = treatmentRepository.getTreatmentById(treatment.id)
             _uiState.update {

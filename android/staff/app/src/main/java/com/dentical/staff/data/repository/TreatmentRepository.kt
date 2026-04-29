@@ -46,6 +46,12 @@ class TreatmentRepository @Inject constructor(
     fun getCrossRefsForTreatment(treatmentId: Long): Flow<List<TreatmentVisitCrossRef>> =
         crossRefDao.getByTreatmentId(treatmentId)
 
+    suspend fun getVisitsByTreatmentOnce(treatmentId: Long): List<VisitEntity> =
+        visitDao.getVisitsByTreatmentOnce(treatmentId)
+
+    suspend fun getCrossRefsForTreatmentOnce(treatmentId: Long): List<TreatmentVisitCrossRef> =
+        crossRefDao.getByTreatmentIdOnce(treatmentId)
+
     fun getVisitCountForTreatment(treatmentId: Long): Flow<Int> =
         crossRefDao.getVisitCountForTreatment(treatmentId)
 

@@ -86,7 +86,17 @@ class PatientDetailViewModel @Inject constructor(
                     } catch (e: Exception) {
                         _uiState.update { it.copy(error = "crossRefs: ${e.javaClass.simpleName}: ${e.message}") }
                     }
-                    _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap) }
+                    val treatments = _uiState.value.treatments
+                    val outstandings = if (treatments.isNotEmpty()) {
+                        treatments.associate { t ->
+                            t.id to if (t.status == TreatmentStatus.ONGOING)
+                                treatmentRepository.calculateTreatmentOutstanding(t.id)
+                            else 0.0
+                        }
+                    } else {
+                        _uiState.value.treatmentOutstandings
+                    }
+                    _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap, treatmentOutstandings = outstandings) }
                 }
         }
 
