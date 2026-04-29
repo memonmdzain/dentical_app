@@ -102,6 +102,15 @@ interface TreatmentDao {
     @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId")
     suspend fun getTotalQuotedCostOnce(patientId: Long): Double
 
+    @Query("SELECT COUNT(*) FROM treatments WHERE status = 'ONGOING'")
+    fun getOngoingTreatmentCount(): Flow<Int>
+
+    @Query("SELECT DISTINCT patientId FROM treatments WHERE status = 'ONGOING'")
+    fun getPatientIdsWithOngoingTreatments(): Flow<List<Long>>
+
+    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments")
+    fun getTotalQuotedAll(): Flow<Double>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertTreatment(treatment: TreatmentEntity): Long
 
@@ -155,6 +164,15 @@ interface VisitDao {
         AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
     """)
     suspend fun getStandaloneVisitsTotalChargedOnce(patientId: Long): Double
+
+    @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM visits WHERE visitDate >= :startOfDay AND visitDate < :endOfDay")
+    fun getTodaysCollections(startOfDay: Long, endOfDay: Long): Flow<Double>
+
+    @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM visits")
+    fun getTotalPaidAll(): Flow<Double>
+
+    @Query("SELECT COALESCE(SUM(costCharged), 0.0) FROM visits WHERE id NOT IN (SELECT visitId FROM treatment_visit_cross_ref)")
+    fun getTotalStandaloneChargedAll(): Flow<Double>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertVisit(visit: VisitEntity): Long

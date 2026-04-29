@@ -11,6 +11,7 @@ import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -69,6 +70,35 @@ class TreatmentRepository @Inject constructor(
             totalPaid = totalPaid,
             totalOutstanding = maxOf(0.0, (totalQuoted + standaloneCharged) - totalPaid)
         )
+    }
+
+    fun getOngoingTreatmentCount(): Flow<Int> =
+        treatmentDao.getOngoingTreatmentCount()
+
+    fun getPatientIdsWithOngoingTreatments(): Flow<List<Long>> =
+        treatmentDao.getPatientIdsWithOngoingTreatments()
+
+    fun getTodaysCollections(): Flow<Double> {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+        val startOfDay = cal.timeInMillis
+        return visitDao.getTodaysCollections(startOfDay, startOfDay + 86_400_000L)
+    }
+
+    fun getTotalOutstandingBalance(): Flow<Double> = combine(
+        treatmentDao.getTotalQuotedAll(),
+        visitDao.getTotalPaidAll(),
+        visitDao.getTotalStandaloneChargedAll()
+    ) { quoted, paid, standalone ->
+        maxOf(0.0, quoted + standalone - paid)
+    }
+
+    suspend fun computeOutstandingOnce(patientId: Long): Double {
+        val quoted = treatmentDao.getTotalQuotedCostOnce(patientId)
+        val paid = visitDao.getTotalAmountPaidOnce(patientId)
+        val standalone = visitDao.getStandaloneVisitsTotalChargedOnce(patientId)
+        return maxOf(0.0, quoted + standalone - paid)
     }
 
     suspend fun addTreatment(treatment: TreatmentEntity): Long =
