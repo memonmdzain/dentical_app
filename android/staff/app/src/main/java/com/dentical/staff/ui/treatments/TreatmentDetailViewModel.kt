@@ -138,6 +138,20 @@ class TreatmentDetailViewModel @Inject constructor(
                 )
             }
             treatmentRepository.updateTreatmentStatus(treatment.id, TreatmentStatus.CANCELLED)
+            if (refundNeeded) {
+                val refundAmount = -state.cancelBalance
+                treatmentRepository.addVisit(
+                    VisitEntity(
+                        patientId = treatment.patientId,
+                        visitDate = System.currentTimeMillis(),
+                        performedBy = "Refund",
+                        amountPaid = -refundAmount,
+                        costCharged = 0.0,
+                        notes = "Refund for cancelled ${treatment.procedure.displayName}"
+                    ),
+                    listOf(treatment.id to "Refund")
+                )
+            }
             val updated = treatmentRepository.getTreatmentById(treatment.id)
             _uiState.update {
                 it.copy(treatment = updated, showCancelDialog = false, cancelConfirmRefundDone = false)

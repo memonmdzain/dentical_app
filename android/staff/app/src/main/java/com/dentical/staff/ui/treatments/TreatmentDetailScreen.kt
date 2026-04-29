@@ -419,8 +419,11 @@ private fun TreatmentVisitCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (visit.amountPaid > 0) {
-                        Surface(shape = MaterialTheme.shapes.small, color = Color(0xFFE8F5E9)) {
+                    when {
+                        visit.amountPaid > 0 -> Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = Color(0xFFE8F5E9)
+                        ) {
                             val paidLabel = buildString {
                                 append("Paid ${formatCurrency(visit.amountPaid)}")
                                 visit.paymentMode?.let { append(" via ${it.displayName}") }
@@ -433,11 +436,25 @@ private fun TreatmentVisitCard(
                                 fontWeight = FontWeight.Medium
                             )
                         }
+                        visit.amountPaid < 0 -> Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.errorContainer
+                        ) {
+                            Text(
+                                "Refunded ${formatCurrency(-visit.amountPaid)}",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
-                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Edit, "Edit visit",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (visit.amountPaid >= 0) {
+                        IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Edit, "Edit visit",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
