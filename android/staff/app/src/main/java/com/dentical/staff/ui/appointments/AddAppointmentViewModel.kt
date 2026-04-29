@@ -1,5 +1,6 @@
 package com.dentical.staff.ui.appointments
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.*
@@ -49,6 +50,7 @@ data class AddAppointmentUiState(
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class AddAppointmentViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val appointmentRepository: AppointmentRepository,
     private val patientRepository: PatientRepository
 ) : ViewModel() {
@@ -60,6 +62,19 @@ class AddAppointmentViewModel @Inject constructor(
     private val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
 
     init {
+        // Pre-fill patient if navigated from dashboard with a patientId
+        val prefilledPatientId = savedStateHandle.get<Long>("patientId") ?: -1L
+        if (prefilledPatientId > 0) {
+            viewModelScope.launch {
+                val patient = patientRepository.getPatientById(prefilledPatientId)
+                if (patient != null) {
+                    _uiState.update { it.copy(
+                        selectedPatient = patient,
+                        patientQuery = patient.fullName
+                    )}
+                }
+            }
+        }
         // Load dentists
         viewModelScope.launch {
             appointmentRepository.getAllActiveDentists().collect { dentists ->

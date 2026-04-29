@@ -60,7 +60,11 @@ android/staff/app/src/main/java/com/dentical/staff/
 │   ├── theme/
 │   ├── navigation/DenticalNavHost.kt
 │   ├── login/                       ✅ Done
-│   ├── dashboard/                   🚧 Placeholder
+│   ├── dashboard/                   ✅ Done
+│   │   ├── DashboardScreen.kt
+│   │   ├── DashboardViewModel.kt
+│   │   ├── DashboardPatientListScreen.kt
+│   │   └── DashboardPatientListViewModel.kt
 │   ├── patients/                    ✅ Done
 │   ├── appointments/                ✅ Done
 │   ├── billing/                     ⏳ Planned
@@ -93,7 +97,7 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`treatment-and-visit-bugfix` — pushed, ready to merge into `develop`
+`android/feature/dashboard` — pushed, ready to merge into `develop`
 
 ---
 
@@ -178,7 +182,14 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 
 ```
 Login ✅
-└── Dashboard 🚧
+└── Dashboard ✅
+    ├── Ongoing Treatments card ✅ (count, tappable)
+    │   └── Ongoing Patients List ✅
+    │       └── Patient card: outstanding balance, Schedule / Call / WhatsApp icons, tap → Patient Detail
+    ├── Today's Collections card ✅ (₹ sum, informational)
+    ├── Total Outstanding card ✅ (₹ sum, tappable)
+    │   └── Outstanding Patients List ✅
+    │       └── Patient card: same format as above
     ├── Appointments ✅
     │   ├── List View ✅
     │   ├── Calendar — Day View ✅
@@ -239,7 +250,7 @@ Login ✅
 - [x] Patients
 - [x] Appointments (list, calendar, add, edit, detail)
 - [x] Treatments + Visits (add, detail, status, payment mode, financial summary)
-- [ ] Dashboard stats
+- [x] Dashboard stats (ongoing count, today's collections, total outstanding, drill-down patient lists)
 - [ ] Billing & invoices
 - [ ] Push reminders
 - [ ] Settings — staff management
@@ -288,6 +299,12 @@ Login ✅
 | Mark Complete confirmation | Yes — confirmation dialog before executing; payment gate runs after confirm |
 | Reopen Treatment confirmation | Yes — quoted cost dialog acts as the confirmation step |
 | Reopen prompts for quoted cost | Yes — pre-filled with current value (blank if none); staff can update before reopening |
+| Dashboard stat cards | 3 cards: Ongoing Treatments (tappable), Today's Collections, Total Outstanding (tappable) |
+| Dashboard outstanding formula | Global: max(0, SUM(quotedCost) + SUM(standalone costCharged) − SUM(amountPaid)) across all patients |
+| Dashboard ongoing patients list | Patients with ≥ 1 treatment in ONGOING status; reactive to treatment status changes |
+| Dashboard outstanding patients list | Patients where per-patient outstanding > ₹0; reactive to patient add/remove |
+| Dashboard patient card | Icon-only action row (Schedule, Call, WhatsApp); tap card → Patient Detail |
+| AddAppointment patientId pre-fill | Optional `?patientId=` nav arg; pre-selects patient when navigated from dashboard |
 
 ---
 
@@ -324,4 +341,4 @@ git push origin develop
 
 ---
 
-> Last updated: April 2026 — treatment-and-visit-bugfix: overpayment prevention on Add Visit; standalone visits section in PatientDetail; cancel treatment with partial charge, live balance, refund dialog, and auto negative-payment visit; cancelled treatments included in Total Billed; outstanding badge reactive to visit changes; Mark Complete confirmation dialog; Reopen Treatment prompts for quoted cost
+> Last updated: April 2026 — android/feature/dashboard: Dashboard stats screen (ongoing treatments count, today's collections, total outstanding); drill-down patient lists with icon-only action cards (Schedule, Call, WhatsApp) and tap-to-patient-detail; AddAppointment supports optional patientId pre-fill nav arg

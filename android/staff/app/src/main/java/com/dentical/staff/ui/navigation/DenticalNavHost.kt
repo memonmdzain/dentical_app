@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dentical.staff.ui.appointments.*
+import com.dentical.staff.ui.dashboard.DashboardPatientListScreen
 import com.dentical.staff.ui.dashboard.DashboardScreen
 import com.dentical.staff.ui.login.LoginScreen
 import com.dentical.staff.ui.patients.*
@@ -22,7 +23,13 @@ sealed class Screen(val route: String) {
         fun createRoute(id: Long) = "patients/$id"
     }
     object Appointments : Screen("appointments")
-    object AddAppointment : Screen("appointments/new")
+    object AddAppointment : Screen("appointments/new?patientId={patientId}") {
+        fun createRoute(patientId: Long? = null) =
+            if (patientId != null) "appointments/new?patientId=$patientId" else "appointments/new"
+    }
+    object PatientListDashboard : Screen("dashboard/patients/{filter}") {
+        fun createRoute(filter: String) = "dashboard/patients/$filter"
+    }
     object AppointmentDetail : Screen("appointments/{appointmentId}") {
         fun createRoute(id: Long) = "appointments/$id"
     }
@@ -102,14 +109,29 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
         // Appointments
         composable(Screen.Appointments.route) {
             AppointmentsScreen(
-                onAddAppointment = { navController.navigate(Screen.AddAppointment.route) },
+                onAddAppointment = { navController.navigate(Screen.AddAppointment.createRoute()) },
                 onAppointmentClick = { navController.navigate(Screen.AppointmentDetail.createRoute(it)) },
                 onBack = { navController.popBackStack() }
             )
         }
-        composable(Screen.AddAppointment.route) {
+        composable(
+            route = Screen.AddAppointment.route,
+            arguments = listOf(navArgument("patientId") {
+                type = NavType.LongType
+                defaultValue = -1L
+            })
+        ) {
             AddAppointmentScreen(
                 onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.PatientListDashboard.route,
+            arguments = listOf(navArgument("filter") { type = NavType.StringType })
+        ) {
+            DashboardPatientListScreen(
+                onNavigate = { navController.navigate(it) },
                 onBack = { navController.popBackStack() }
             )
         }

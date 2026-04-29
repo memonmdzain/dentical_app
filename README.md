@@ -60,6 +60,7 @@ android/feature/xxx
 
 ### Staff & Admin App (`android/staff/`)
 Internal app for clinic staff. Distributed as private APK.
+- Dashboard: ongoing treatments count, today's collections, total outstanding — each stat tappable to a drill-down patient list with Schedule / Call / WhatsApp actions
 - Appointment management (list, calendar day/week/month, add, edit, detail)
 - Patient records with financial summary (Total Billed / Paid / Outstanding)
 - Treatments: add, edit, ongoing/past sections, standalone visits section
