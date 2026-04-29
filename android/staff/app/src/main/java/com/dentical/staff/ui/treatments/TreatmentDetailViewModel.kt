@@ -31,7 +31,8 @@ data class TreatmentDetailUiState(
     val cancelBalance: Double = 0.0,
     val cancelConfirmRefundDone: Boolean = false,
     val showReopenDialog: Boolean = false,
-    val reopenQuotedCost: String = ""
+    val reopenQuotedCost: String = "",
+    val showCompleteDialog: Boolean = false
 )
 
 @HiltViewModel
@@ -68,9 +69,13 @@ class TreatmentDetailViewModel @Inject constructor(
         }
     }
 
+    fun openCompleteDialog() = _uiState.update { it.copy(showCompleteDialog = true, error = null) }
+
+    fun dismissCompleteDialog() = _uiState.update { it.copy(showCompleteDialog = false) }
+
     fun markComplete(treatmentId: Long) {
         viewModelScope.launch {
-            _uiState.update { it.copy(error = null) }
+            _uiState.update { it.copy(showCompleteDialog = false, error = null) }
             val outstanding = treatmentRepository.calculateTreatmentOutstanding(treatmentId)
             if (outstanding > 0.01) {
                 val name = _uiState.value.treatment?.procedure?.displayName ?: "treatment"

@@ -221,7 +221,7 @@ fun TreatmentDetailScreen(
                                 )
                             ) { Text("Cancel Treatment") }
                             Button(
-                                onClick = { viewModel.markComplete(treatment.id) },
+                                onClick = { viewModel.openCompleteDialog() },
                                 modifier = Modifier.weight(1f)
                             ) { Text("Mark Complete") }
                         }
@@ -272,6 +272,34 @@ fun TreatmentDetailScreen(
                 item { Spacer(Modifier.height(72.dp)) }
             }
         }
+    }
+
+    if (uiState.showCompleteDialog) {
+        val treatment = uiState.treatment
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCompleteDialog() },
+            title = { Text("Mark as Complete") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (treatment != null) {
+                        val label = buildString {
+                            append(treatment.procedure.displayName)
+                            treatment.toothNumber?.let { append(" · Tooth #$it") }
+                        }
+                        Text(label, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text("Mark this treatment as complete?")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.markComplete(uiState.treatment?.id ?: return@TextButton) }) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCompleteDialog() }) { Text("Cancel") }
+            }
+        )
     }
 
     if (uiState.showCancelDialog) {
