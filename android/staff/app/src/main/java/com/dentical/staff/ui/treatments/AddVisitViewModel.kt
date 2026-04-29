@@ -131,6 +131,26 @@ class AddVisitViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                val amountPaidVal = state.amountPaid.toDoubleOrNull() ?: 0.0
+                if (amountPaidVal > 0.0) {
+                    val maxAllowed = if (isStandalone) {
+                        state.costCharged.toDoubleOrNull() ?: 0.0
+                    } else {
+                        selectedTreatments.sumOf {
+                            treatmentRepository.calculateTreatmentOutstanding(it.treatment.id)
+                        }
+                    }
+                    if (amountPaidVal > maxAllowed + 0.01) {
+                        _uiState.update {
+                            it.copy(
+                                isSaving = false,
+                                error = "Amount paid ₹${amountPaidVal.toLong()} exceeds outstanding ₹${maxAllowed.toLong()}. Reduce payment or update the treatment cost first."
+                            )
+                        }
+                        return@launch
+                    }
+                }
+
                 val visit = VisitEntity(
                     patientId = patientId,
                     visitDate = state.visitDateMillis,

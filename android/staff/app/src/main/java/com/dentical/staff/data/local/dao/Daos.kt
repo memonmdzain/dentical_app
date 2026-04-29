@@ -96,8 +96,11 @@ interface TreatmentDao {
     @Query("SELECT * FROM treatments WHERE id = :id")
     suspend fun getTreatmentById(id: Long): TreatmentEntity?
 
-    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId AND status != 'CANCELLED'")
+    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId")
     fun getTotalQuotedCost(patientId: Long): Flow<Double>
+
+    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId")
+    suspend fun getTotalQuotedCostOnce(patientId: Long): Double
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertTreatment(treatment: TreatmentEntity): Long
@@ -136,12 +139,22 @@ interface VisitDao {
     @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM visits WHERE patientId = :patientId")
     fun getTotalAmountPaid(patientId: Long): Flow<Double>
 
+    @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM visits WHERE patientId = :patientId")
+    suspend fun getTotalAmountPaidOnce(patientId: Long): Double
+
     @Query("""
         SELECT COALESCE(SUM(costCharged), 0.0) FROM visits
         WHERE patientId = :patientId
         AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
     """)
     fun getStandaloneVisitsTotalCharged(patientId: Long): Flow<Double>
+
+    @Query("""
+        SELECT COALESCE(SUM(costCharged), 0.0) FROM visits
+        WHERE patientId = :patientId
+        AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
+    """)
+    suspend fun getStandaloneVisitsTotalChargedOnce(patientId: Long): Double
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertVisit(visit: VisitEntity): Long

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.PatientEntity
 import com.dentical.staff.data.local.entities.TreatmentEntity
+import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
 import com.dentical.staff.data.repository.PatientFinancialSummary
@@ -24,6 +25,7 @@ data class PatientDetailUiState(
     val isLoading: Boolean = true,
     val selectedTab: Int = 0,
     val treatments: List<TreatmentEntity> = emptyList(),
+    val treatmentOutstandings: Map<Long, Double> = emptyMap(),
     val visits: List<VisitEntity> = emptyList(),
     val visitCrossRefs: Map<Long, List<TreatmentVisitCrossRef>> = emptyMap(),
     val financialSummary: PatientFinancialSummary = PatientFinancialSummary(0.0, 0.0, 0.0, 0.0),
@@ -63,7 +65,12 @@ class PatientDetailViewModel @Inject constructor(
             treatmentRepository.getTreatmentsByPatient(id)
                 .catch { e -> _uiState.update { it.copy(error = "treatments: ${e.javaClass.simpleName}: ${e.message}") } }
                 .collect { treatments ->
-                    _uiState.update { it.copy(treatments = treatments) }
+                    val outstandings = treatments.associate { t ->
+                        t.id to if (t.status == TreatmentStatus.ONGOING)
+                            treatmentRepository.calculateTreatmentOutstanding(t.id)
+                        else 0.0
+                    }
+                    _uiState.update { it.copy(treatments = treatments, treatmentOutstandings = outstandings) }
                 }
         }
 
@@ -79,7 +86,17 @@ class PatientDetailViewModel @Inject constructor(
                     } catch (e: Exception) {
                         _uiState.update { it.copy(error = "crossRefs: ${e.javaClass.simpleName}: ${e.message}") }
                     }
-                    _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap) }
+                    val treatments = _uiState.value.treatments
+                    val outstandings = if (treatments.isNotEmpty()) {
+                        treatments.associate { t ->
+                            t.id to if (t.status == TreatmentStatus.ONGOING)
+                                treatmentRepository.calculateTreatmentOutstanding(t.id)
+                            else 0.0
+                        }
+                    } else {
+                        _uiState.value.treatmentOutstandings
+                    }
+                    _uiState.update { it.copy(visits = visits, visitCrossRefs = crossRefMap, treatmentOutstandings = outstandings) }
                 }
         }
 

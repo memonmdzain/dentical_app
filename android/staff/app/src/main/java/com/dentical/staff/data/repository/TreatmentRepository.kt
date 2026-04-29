@@ -1,5 +1,7 @@
 package com.dentical.staff.data.repository
 
+import androidx.room.withTransaction
+import com.dentical.staff.data.local.DenticalDatabase
 import com.dentical.staff.data.local.dao.TreatmentDao
 import com.dentical.staff.data.local.dao.TreatmentVisitCrossRefDao
 import com.dentical.staff.data.local.dao.VisitDao
@@ -21,6 +23,7 @@ data class PatientFinancialSummary(
 
 @Singleton
 class TreatmentRepository @Inject constructor(
+    private val db: DenticalDatabase,
     private val treatmentDao: TreatmentDao,
     private val visitDao: VisitDao,
     private val crossRefDao: TreatmentVisitCrossRefDao
@@ -42,6 +45,12 @@ class TreatmentRepository @Inject constructor(
 
     fun getCrossRefsForTreatment(treatmentId: Long): Flow<List<TreatmentVisitCrossRef>> =
         crossRefDao.getByTreatmentId(treatmentId)
+
+    suspend fun getVisitsByTreatmentOnce(treatmentId: Long): List<VisitEntity> =
+        visitDao.getVisitsByTreatmentOnce(treatmentId)
+
+    suspend fun getCrossRefsForTreatmentOnce(treatmentId: Long): List<TreatmentVisitCrossRef> =
+        crossRefDao.getByTreatmentIdOnce(treatmentId)
 
     fun getVisitCountForTreatment(treatmentId: Long): Flow<Int> =
         crossRefDao.getVisitCountForTreatment(treatmentId)
@@ -112,11 +121,27 @@ class TreatmentRepository @Inject constructor(
         return maxOf(0.0, quotedCost - totalAllocated)
     }
 
+    /**
+     * Signed patient balance after cancelling [treatmentId] with [partialCharge] as the charge
+     * for work done so far. Negative = patient is owed a refund.
+     */
+    suspend fun computeCancellationBalance(treatmentId: Long, partialCharge: Double): Double {
+        val treatment = treatmentDao.getTreatmentById(treatmentId) ?: return 0.0
+        val patientId = treatment.patientId
+        val totalQuoted = treatmentDao.getTotalQuotedCostOnce(patientId)
+        val standaloneCharged = visitDao.getStandaloneVisitsTotalChargedOnce(patientId)
+        val totalPaid = visitDao.getTotalAmountPaidOnce(patientId)
+        val originalCost = treatment.quotedCost ?: 0.0
+        return (totalQuoted - originalCost + partialCharge + standaloneCharged) - totalPaid
+    }
+
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {
-        val visitId = visitDao.insertVisit(visit)
-        treatmentLinks.forEach { (treatmentId, workDone) ->
-            crossRefDao.insert(TreatmentVisitCrossRef(treatmentId, visitId, workDone))
+        return db.withTransaction {
+            val visitId = visitDao.insertVisit(visit)
+            treatmentLinks.forEach { (treatmentId, workDone) ->
+                crossRefDao.insert(TreatmentVisitCrossRef(treatmentId, visitId, workDone))
+            }
+            visitId
         }
-        return visitId
     }
 }

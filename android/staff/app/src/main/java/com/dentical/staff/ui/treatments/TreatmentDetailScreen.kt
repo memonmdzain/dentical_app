@@ -3,6 +3,7 @@ package com.dentical.staff.ui.treatments
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -13,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dentical.staff.data.local.entities.TreatmentStatus
@@ -37,7 +39,6 @@ fun TreatmentDetailScreen(
 
     LaunchedEffect(treatmentId) { viewModel.load(treatmentId) }
 
-    var showCancelDialog by remember { mutableStateOf(false) }
     val dateFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
 
     Scaffold(
@@ -213,21 +214,21 @@ fun TreatmentDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OutlinedButton(
-                                onClick = { showCancelDialog = true },
+                                onClick = { viewModel.openCancelDialog() },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = MaterialTheme.colorScheme.error
                                 )
                             ) { Text("Cancel Treatment") }
                             Button(
-                                onClick = { viewModel.markComplete(treatment.id) },
+                                onClick = { viewModel.openCompleteDialog() },
                                 modifier = Modifier.weight(1f)
                             ) { Text("Mark Complete") }
                         }
                     }
                     TreatmentStatus.COMPLETED, TreatmentStatus.CANCELLED -> item {
                         OutlinedButton(
-                            onClick = { viewModel.reactivateTreatment(treatment.id) },
+                            onClick = { viewModel.openReopenDialog() },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Reopen Treatment") }
                     }
@@ -273,21 +274,173 @@ fun TreatmentDetailScreen(
         }
     }
 
-    if (showCancelDialog) {
+    if (uiState.showCompleteDialog) {
+        val treatment = uiState.treatment
         AlertDialog(
-            onDismissRequest = { showCancelDialog = false },
-            title = { Text("Cancel Treatment?") },
-            text = { Text("This will mark the treatment as cancelled. You can reopen it later.") },
+            onDismissRequest = { viewModel.dismissCompleteDialog() },
+            title = { Text("Mark as Complete") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (treatment != null) {
+                        val label = buildString {
+                            append(treatment.procedure.displayName)
+                            treatment.toothNumber?.let { append(" · Tooth #$it") }
+                        }
+                        Text(label, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text("Mark this treatment as complete?")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.markComplete(uiState.treatment?.id ?: return@TextButton) }) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCompleteDialog() }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (uiState.showCancelDialog) {
+        val treatment = uiState.treatment
+        val refundAmount = if (uiState.cancelBalance < -0.01) -uiState.cancelBalance else 0.0
+        val balanceOwed = if (uiState.cancelBalance > 0.01) uiState.cancelBalance else 0.0
+        val refundNeeded = refundAmount > 0.01
+
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCancelDialog() },
+            title = { Text("Cancel Treatment") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (treatment != null) {
+                        val label = buildString {
+                            append(treatment.procedure.displayName)
+                            treatment.toothNumber?.let { append(" · Tooth #$it") }
+                        }
+                        Text(label, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Text(
+                        "Set the amount to charge for work completed so far:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = uiState.cancelPartialCharge,
+                        onValueChange = { viewModel.onCancelPartialChargeChanged(it) },
+                        label = { Text("Amount to charge ₹") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    when {
+                        refundNeeded -> Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "Refund ₹${refundAmount.toLong()} to patient",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Text(
+                                    "Patient has paid more than what will be billed after this cancellation.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = uiState.cancelConfirmRefundDone,
+                                        onCheckedChange = { viewModel.onCancelConfirmRefundToggle(it) }
+                                    )
+                                    Text(
+                                        "I confirm I have refunded ₹${refundAmount.toLong()} to the patient",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+
+                        balanceOwed > 0.01 -> Text(
+                            "Patient still has ₹${balanceOwed.toLong()} outstanding after this cancellation.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        else -> Text(
+                            "Patient balance is clear after this cancellation.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
+
+                    uiState.error?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        uiState.treatment?.let { viewModel.cancelTreatment(it.id) }
-                        showCancelDialog = false
-                    }
+                    onClick = { viewModel.confirmCancelTreatment() },
+                    enabled = !refundNeeded || uiState.cancelConfirmRefundDone
                 ) { Text("Cancel Treatment", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showCancelDialog = false }) { Text("Keep") }
+                TextButton(onClick = { viewModel.dismissCancelDialog() }) { Text("Keep") }
+            }
+        )
+    }
+
+    if (uiState.showReopenDialog) {
+        val treatment = uiState.treatment
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissReopenDialog() },
+            title = { Text("Reopen Treatment") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (treatment != null) {
+                        val label = buildString {
+                            append(treatment.procedure.displayName)
+                            treatment.toothNumber?.let { append(" · Tooth #$it") }
+                        }
+                        Text(label, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(
+                        "Update the quoted cost for this treatment:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = uiState.reopenQuotedCost,
+                        onValueChange = { viewModel.onReopenQuotedCostChanged(it) },
+                        label = { Text("Quoted cost ₹") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("Leave blank if not set") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmReopenTreatment() }) {
+                    Text("Reopen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissReopenDialog() }) { Text("Cancel") }
             }
         )
     }
@@ -335,8 +488,11 @@ private fun TreatmentVisitCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (visit.amountPaid > 0) {
-                        Surface(shape = MaterialTheme.shapes.small, color = Color(0xFFE8F5E9)) {
+                    when {
+                        visit.amountPaid > 0 -> Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = Color(0xFFE8F5E9)
+                        ) {
                             val paidLabel = buildString {
                                 append("Paid ${formatCurrency(visit.amountPaid)}")
                                 visit.paymentMode?.let { append(" via ${it.displayName}") }
@@ -349,11 +505,25 @@ private fun TreatmentVisitCard(
                                 fontWeight = FontWeight.Medium
                             )
                         }
+                        visit.amountPaid < 0 -> Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.errorContainer
+                        ) {
+                            Text(
+                                "Refunded ${formatCurrency(-visit.amountPaid)}",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
-                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Edit, "Edit visit",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (visit.amountPaid >= 0) {
+                        IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Edit, "Edit visit",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
