@@ -62,7 +62,9 @@ android/feature/xxx
 Internal app for clinic staff. Distributed as private APK.
 - Appointment management
 - Patient records
-- Treatment history + visits (payment mode: Cash/GPay/Bank Transfer)
+- Treatment history + visits (add, edit, payment mode: Cash/GPay/Bank Transfer)
+- Treatment detail with visit list, edit treatment, reopen completed/cancelled treatment
+- Payment gate on completion (FIFO allocation across linked treatments)
 - Billing & payments
 - Push reminders
 

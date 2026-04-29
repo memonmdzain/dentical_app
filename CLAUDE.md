@@ -50,10 +50,11 @@ android/staff/app/src/main/java/com/dentical/staff/
 │   │   │   ├── AppointmentEntity.kt (type enum + dentistId)
 │   │   │   └── TreatmentAndInvoiceEntities.kt
 │   │   ├── Converters.kt
-│   │   └── DenticalDatabase.kt     (version 3, exportSchema=false)
+│   │   └── DenticalDatabase.kt     (version 6, exportSchema=false)
 │   └── repository/
 │       ├── PatientRepository.kt
-│       └── AppointmentRepository.kt
+│       ├── AppointmentRepository.kt
+│       └── TreatmentRepository.kt
 ├── di/DatabaseModule.kt
 ├── ui/
 │   ├── theme/
@@ -92,7 +93,7 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`android/feature/treatments-visits` — treatments, visits, payment mode, crash fixes in progress
+`claude/add-treatments-visits-poE0P` — pushed, ready to merge into `android/feature/treatments-visits` then `develop`
 
 ---
 
@@ -192,8 +193,14 @@ Login ✅
     │   └── Patient Detail ✅ (Overview, Treatments+Visits sectioned, Invoices placeholder)
     │       ├── Treatments tab: Ongoing / Past sections (lazy LazyColumn)
     │       ├── Add Treatment ✅
+    │       ├── Edit Treatment ✅
     │       ├── Add Visit ✅ (payment mode: Cash/GPay/Bank Transfer)
-    │       └── Treatment Detail ✅ (status actions, visits list)
+    │       └── Treatment Detail ✅
+    │           ├── Visits list with edit per visit ✅
+    │           ├── Edit Visit ✅
+    │           ├── Mark Complete (blocked if outstanding payment, FIFO allocation) ✅
+    │           ├── Cancel Treatment ✅
+    │           └── Reopen Treatment (for Completed + Cancelled) ✅
     ├── Billing ⏳
     ├── Reminders ⏳
     └── Settings ⏳ (Admin only)
@@ -264,6 +271,12 @@ Login ✅
 | Treatment sections: Ongoing / Past | Yes |
 | fallbackToDestructiveMigration (dev) | Yes — remove before Play Store launch |
 | Phase 2 TTL cache default | 5 minutes, in-memory, per repository |
+| Edit visits | Yes — date, dentist, amount, payment mode, notes |
+| Edit treatments | Yes — all fields editable |
+| Reopen treatment | Yes — works for both Completed and Cancelled |
+| Payment gate on Mark Complete | Yes — FIFO allocation across linked treatments; blocks if outstanding > ₹0 |
+| FIFO payment allocation | Allocate visit payment to treatments sorted by startDate, then id |
+| Visits shown only in Treatment Detail | Yes — removed from PatientDetail TreatmentsTab |
 
 ---
 
@@ -300,4 +313,4 @@ git push origin develop
 
 ---
 
-> Last updated: April 2026 — Treatments + Visits complete; payment mode; sectioned treatment list; data loading strategy documented
+> Last updated: April 2026 — Edit visits + edit treatments + reopen treatment + FIFO payment gate on Mark Complete; visits moved to Treatment Detail only; crash fix (duplicate LazyColumn keys)
