@@ -1,5 +1,7 @@
 package com.dentical.staff.data.repository
 
+import androidx.room.withTransaction
+import com.dentical.staff.data.local.DenticalDatabase
 import com.dentical.staff.data.local.dao.TreatmentDao
 import com.dentical.staff.data.local.dao.TreatmentVisitCrossRefDao
 import com.dentical.staff.data.local.dao.VisitDao
@@ -21,6 +23,7 @@ data class PatientFinancialSummary(
 
 @Singleton
 class TreatmentRepository @Inject constructor(
+    private val db: DenticalDatabase,
     private val treatmentDao: TreatmentDao,
     private val visitDao: VisitDao,
     private val crossRefDao: TreatmentVisitCrossRefDao
@@ -113,10 +116,12 @@ class TreatmentRepository @Inject constructor(
     }
 
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {
-        val visitId = visitDao.insertVisit(visit)
-        treatmentLinks.forEach { (treatmentId, workDone) ->
-            crossRefDao.insert(TreatmentVisitCrossRef(treatmentId, visitId, workDone))
+        return db.withTransaction {
+            val visitId = visitDao.insertVisit(visit)
+            treatmentLinks.forEach { (treatmentId, workDone) ->
+                crossRefDao.insert(TreatmentVisitCrossRef(treatmentId, visitId, workDone))
+            }
+            visitId
         }
-        return visitId
     }
 }

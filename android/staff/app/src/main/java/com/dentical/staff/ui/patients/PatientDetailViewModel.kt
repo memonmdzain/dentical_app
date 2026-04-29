@@ -24,6 +24,7 @@ data class PatientDetailUiState(
     val isLoading: Boolean = true,
     val selectedTab: Int = 0,
     val treatments: List<TreatmentEntity> = emptyList(),
+    val treatmentOutstandings: Map<Long, Double> = emptyMap(),
     val visits: List<VisitEntity> = emptyList(),
     val visitCrossRefs: Map<Long, List<TreatmentVisitCrossRef>> = emptyMap(),
     val financialSummary: PatientFinancialSummary = PatientFinancialSummary(0.0, 0.0, 0.0, 0.0),
@@ -63,7 +64,10 @@ class PatientDetailViewModel @Inject constructor(
             treatmentRepository.getTreatmentsByPatient(id)
                 .catch { e -> _uiState.update { it.copy(error = "treatments: ${e.javaClass.simpleName}: ${e.message}") } }
                 .collect { treatments ->
-                    _uiState.update { it.copy(treatments = treatments) }
+                    val outstandings = treatments.associate { t ->
+                        t.id to treatmentRepository.calculateTreatmentOutstanding(t.id)
+                    }
+                    _uiState.update { it.copy(treatments = treatments, treatmentOutstandings = outstandings) }
                 }
         }
 

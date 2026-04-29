@@ -67,8 +67,9 @@ class TreatmentDetailViewModel @Inject constructor(
             _uiState.update { it.copy(error = null) }
             val outstanding = treatmentRepository.calculateTreatmentOutstanding(treatmentId)
             if (outstanding > 0.01) {
+                val name = _uiState.value.treatment?.procedure?.displayName ?: "treatment"
                 _uiState.update {
-                    it.copy(error = "Cannot complete: ₹${outstanding.toLong()} outstanding. Settle payment first.")
+                    it.copy(error = "Cannot complete '$name': ₹${outstanding.toLong()} still outstanding. Settle the balance or increase the quoted cost first.")
                 }
                 return@launch
             }

@@ -17,8 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dentical.staff.data.local.entities.PatientEntity
+import com.dentical.staff.data.local.entities.PaymentMode
 import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.TreatmentStatus
+import com.dentical.staff.data.local.entities.VisitEntity
 import com.dentical.staff.data.repository.PatientFinancialSummary
 import com.dentical.staff.util.PhoneUtil
 import java.text.NumberFormat
@@ -211,6 +213,10 @@ fun PatientDetailScreen(
                     1 -> TreatmentsTab(
                         patient = patient,
                         treatments = uiState.treatments,
+                        standaloneVisits = uiState.visits.filter {
+                            uiState.visitCrossRefs[it.id].isNullOrEmpty()
+                        },
+                        treatmentOutstandings = uiState.treatmentOutstandings,
                         financialSummary = uiState.financialSummary,
                         onAddTreatment = onAddTreatment,
                         onAddVisit = onAddVisit,
@@ -227,6 +233,8 @@ fun PatientDetailScreen(
 fun TreatmentsTab(
     patient: PatientEntity,
     treatments: List<TreatmentEntity>,
+    standaloneVisits: List<VisitEntity>,
+    treatmentOutstandings: Map<Long, Double>,
     financialSummary: PatientFinancialSummary,
     onAddTreatment: () -> Unit,
     onAddVisit: () -> Unit,
@@ -277,8 +285,12 @@ fun TreatmentsTab(
         if (ongoingTreatments.isNotEmpty()) {
             item { SectionHeader("Ongoing Treatments (${ongoingTreatments.size})", modifier = Modifier.padding(top = 4.dp)) }
             items(ongoingTreatments, key = { "t${it.id}" }) { treatment ->
-                TreatmentCard(treatment = treatment, dateFormatter = dateFormatter,
-                    onClick = { onTreatmentClick(treatment.id) })
+                TreatmentCard(
+                    treatment = treatment,
+                    dateFormatter = dateFormatter,
+                    outstanding = treatmentOutstandings[treatment.id],
+                    onClick = { onTreatmentClick(treatment.id) }
+                )
             }
         }
 
@@ -292,8 +304,16 @@ fun TreatmentsTab(
             }
         }
 
+        // Standalone visits section
+        if (standaloneVisits.isNotEmpty()) {
+            item { SectionHeader("Standalone Visits (${standaloneVisits.size})", modifier = Modifier.padding(top = 4.dp)) }
+            items(standaloneVisits, key = { "sv${it.id}" }) { visit ->
+                StandaloneVisitCard(visit = visit, dateFormatter = dateFormatter)
+            }
+        }
+
         // Empty state
-        if (treatments.isEmpty()) {
+        if (treatments.isEmpty() && standaloneVisits.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
@@ -316,6 +336,61 @@ private fun SectionHeader(title: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
     )
+}
+
+@Composable
+private fun StandaloneVisitCard(visit: VisitEntity, dateFormatter: SimpleDateFormat) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    dateFormatter.format(Date(visit.visitDate)),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (visit.amountPaid > 0) {
+                    Surface(shape = MaterialTheme.shapes.small, color = Color(0xFFE8F5E9)) {
+                        Text(
+                            buildString {
+                                append("Paid ${formatCurrency(visit.amountPaid)}")
+                                visit.paymentMode?.let { append(" · ${it.displayName}") }
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF2E7D32),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+            Text(
+                "By ${visit.performedBy}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (visit.costCharged > 0) {
+                Text(
+                    "Charged: ${formatCurrency(visit.costCharged)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (!visit.notes.isNullOrBlank()) {
+                Text(
+                    visit.notes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -407,6 +482,7 @@ private fun FinancialFigure(label: String, amount: Double, color: Color) {
 fun TreatmentCard(
     treatment: TreatmentEntity,
     dateFormatter: SimpleDateFormat,
+    outstanding: Double? = null,
     onClick: () -> Unit
 ) {
     Card(
@@ -460,6 +536,21 @@ fun TreatmentCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (outstanding != null && outstanding > 0.01 && treatment.status == TreatmentStatus.ONGOING) {
+                Spacer(Modifier.height(4.dp))
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Text(
+                        "Outstanding: ${formatCurrency(outstanding)}",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         }
     }
