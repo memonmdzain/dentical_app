@@ -292,7 +292,7 @@ fun TreatmentsTab(
             item {
                 SectionHeader("Visits (${visits.size})", modifier = Modifier.padding(top = 4.dp))
             }
-            items(visits, key = { it.id }) { visit ->
+            items(visits, key = { "v${it.id}" }) { visit ->
                 val linkedTreatments = visitCrossRefs[visit.id] ?: emptyList()
                 VisitCard(
                     visit = visit,
@@ -309,7 +309,7 @@ fun TreatmentsTab(
             item {
                 SectionHeader("Ongoing Treatments (${ongoingTreatments.size})", modifier = Modifier.padding(top = 4.dp))
             }
-            items(ongoingTreatments, key = { it.id }) { treatment ->
+            items(ongoingTreatments, key = { "t${it.id}" }) { treatment ->
                 TreatmentCard(
                     treatment = treatment,
                     dateFormatter = dateFormatter,
@@ -324,7 +324,7 @@ fun TreatmentsTab(
             item {
                 SectionHeader("Past Treatments (${pastTreatments.size})", modifier = Modifier.padding(top = 4.dp))
             }
-            items(pastTreatments, key = { it.id }) { treatment ->
+            items(pastTreatments, key = { "t${it.id}" }) { treatment ->
                 TreatmentCard(
                     treatment = treatment,
                     dateFormatter = dateFormatter,
