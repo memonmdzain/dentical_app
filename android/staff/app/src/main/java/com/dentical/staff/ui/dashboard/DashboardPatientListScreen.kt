@@ -2,6 +2,7 @@ package com.dentical.staff.ui.dashboard
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,7 +16,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.dentical.staff.data.local.entities.PatientEntity
 import com.dentical.staff.util.PhoneUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,13 +85,13 @@ fun DashboardPatientListScreen(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
                 ) {
                     items(uiState.patients) { dashboardPatient ->
                         DashboardPatientCard(
                             dashboardPatient = dashboardPatient,
-                            onSchedule = { onNavigate(it) }
+                            onNavigate = onNavigate
                         )
                     }
                 }
@@ -103,94 +103,98 @@ fun DashboardPatientListScreen(
 @Composable
 private fun DashboardPatientCard(
     dashboardPatient: DashboardPatient,
-    onSchedule: (route: String) -> Unit
+    onNavigate: (String) -> Unit
 ) {
     val context = LocalContext.current
     val patient = dashboardPatient.patient
     val phone = patient.phone?.takeIf { it.isNotBlank() }
         ?: patient.guardianPhone?.takeIf { it.isNotBlank() }
-    val hasPhone = phone != null
-
-    fun dial() {
-        phone?.let {
-            context.startActivity(
-                Intent(Intent.ACTION_DIAL, Uri.parse("tel:${PhoneUtil.formatForDialing(it)}"))
-            )
-        }
-    }
-
-    fun openWhatsApp() {
-        phone?.let {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(PhoneUtil.whatsAppUrl(it)))
-            )
-        }
-    }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                onNavigate(com.dentical.staff.ui.navigation.Screen.PatientDetail.createRoute(patient.id))
+            },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = patient.fullName,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = "#${patient.patientCode}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "#${patient.patientCode}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "·",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "₹${"%.2f".format(dashboardPatient.outstandingBalance)} due",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (dashboardPatient.outstandingBalance > 0.0)
+                            MaterialTheme.colorScheme.error
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            Text(
-                text = "Outstanding: ₹${"%.2f".format(dashboardPatient.outstandingBalance)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (dashboardPatient.outstandingBalance > 0.0)
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = { onSchedule(com.dentical.staff.ui.navigation.Screen.AddAppointment.createRoute(patient.id)) },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                IconButton(
+                    onClick = {
+                        onNavigate(com.dentical.staff.ui.navigation.Screen.AddAppointment.createRoute(patient.id))
+                    }
                 ) {
                     Icon(
                         Icons.Default.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = "Schedule appointment",
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Schedule", style = MaterialTheme.typography.labelMedium)
                 }
-
-                if (hasPhone) {
-                    IconButton(onClick = { dial() }) {
+                if (phone != null) {
+                    IconButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_DIAL, Uri.parse("tel:${PhoneUtil.formatForDialing(phone)}"))
+                            )
+                        }
+                    ) {
                         Icon(
                             Icons.Default.Call,
                             contentDescription = "Call",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    IconButton(onClick = { openWhatsApp() }) {
+                    IconButton(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(PhoneUtil.whatsAppUrl(phone)))
+                            )
+                        }
+                    ) {
                         Icon(
                             Icons.Default.Chat,
                             contentDescription = "WhatsApp",
-                            tint = MaterialTheme.colorScheme.secondary
+                            tint = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
