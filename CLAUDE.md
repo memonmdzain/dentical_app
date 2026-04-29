@@ -1,6 +1,7 @@
 # 🦷 Dentical App — Claude Context File
 
 > Paste this file at the start of every new Claude session to restore full project context.
+> Tip: Tap + → Add from GitHub → select this file to load it instantly.
 
 ---
 
@@ -10,6 +11,8 @@ A dental clinic management system built as a multi-module monorepo.
 - **Repo:** github.com/memonmdzain/dentical_app
 - **Owner:** memonmdzain (personal GitHub account)
 - **Visibility:** Public during development, private after launch
+- **Dev environment:** Mobile only (travelling) — Termux + Git on Android
+- **Repo location on device:** ~/storage/dentical_app
 
 ---
 
@@ -24,12 +27,48 @@ dentical_app/
 ├── website/                # Web frontend (future)
 ├── .github/
 │   └── workflows/
-│       ├── android-staff.yml    # Triggers on android/staff/** only
+│       ├── android-staff.yml
 │       ├── android-patient.yml  # Placeholder
 │       ├── backend.yml          # Placeholder
 │       └── website.yml          # Placeholder
-├── CLAUDE.md               # This file
+├── CLAUDE.md
 └── README.md
+```
+
+---
+
+## Android Staff App Structure
+
+```
+android/staff/app/src/main/java/com/dentical/staff/
+├── data/
+│   ├── local/
+│   │   ├── dao/Daos.kt
+│   │   ├── entities/
+│   │   │   ├── UserEntity.kt        (roles: ADMIN, DENTIST, STAFF)
+│   │   │   ├── PatientEntity.kt
+│   │   │   ├── AppointmentEntity.kt (type enum + dentistId)
+│   │   │   └── TreatmentAndInvoiceEntities.kt
+│   │   ├── Converters.kt
+│   │   └── DenticalDatabase.kt     (version 6, exportSchema=false)
+│   └── repository/
+│       ├── PatientRepository.kt
+│       ├── AppointmentRepository.kt
+│       └── TreatmentRepository.kt
+├── di/DatabaseModule.kt
+├── ui/
+│   ├── theme/
+│   ├── navigation/DenticalNavHost.kt
+│   ├── login/                       ✅ Done
+│   ├── dashboard/                   🚧 Placeholder
+│   ├── patients/                    ✅ Done
+│   ├── appointments/                ✅ Done
+│   ├── billing/                     ⏳ Planned
+│   ├── reminders/                   ⏳ Planned
+│   └── settings/                    ⏳ Planned
+└── util/
+    ├── PasswordUtil.kt
+    └── PhoneUtil.kt
 ```
 
 ---
@@ -38,125 +77,240 @@ dentical_app/
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production only. Protected. Never commit directly. |
-| `develop` | Integration branch. All features merge here first. |
+| `master` | Production only. Never commit directly. |
+| `develop` | Integration branch. Merge here after each working feature. |
 | `android/feature/*` | One branch per feature |
 | `android/fix/*` | Bug fixes |
 
 ### Flow
 ```
-android/feature/xxx → develop (PR) → main (PR + release tag)
+android/feature/xxx → develop (PR) → master (PR + release tag)
 ```
 
-### Version Tags
-```
-android-staff/v0.1.0-dev   ← current
-android-patient/v0.1.0-dev ← future
-backend/v0.1.0-dev         ← future
-website/v0.1.0-dev         ← future
-```
+### IMPORTANT — Code Access Between Sessions
+- Merge working features to `develop` after each test
+- New session: tap + → Add from GitHub → select files needed
+- Claude reads from whatever branch you share
+
+### Current active branch
+`claude/add-treatments-visits-poE0P` — pushed, ready to merge into `android/feature/treatments-visits` then `develop`
 
 ---
 
 ## CI/CD — GitHub Actions
 
-- Each module has its own workflow file
-- Path filters ensure only the changed module builds
-- Android debug APK is built on every push to `develop`
-- APK is uploaded as a GitHub Actions artifact (downloadable for 7 days)
-- Build time: ~5-10 min per run
-- Free tier: 2,000 min/month (public repo = unlimited)
+- Path filters per module
+- Android debug APK on every push to develop
+- APK artifact downloadable for 7 days
+- Public repo = unlimited free minutes
+- Uninstall old APK before installing new one
 
 ---
 
-## Android Staff App
+## Tech Stack ✅
 
-### Purpose
-Internal app for dental clinic staff and admins.
-Distributed as a private APK (not on Play Store).
+| Layer | Choice |
+|-------|--------|
+| Language | Kotlin |
+| UI | Jetpack Compose |
+| Architecture | MVVM |
+| Local DB | Room v3 |
+| DI | Hilt |
+| Navigation | Jetpack Navigation Compose |
+| Auth MVP | Local username/password + roles |
+| Auth Phase 2 | Google OAuth |
+| Backend Phase 2 | PostgreSQL |
 
-### Features
-- [ ] Appointment booking & management
-- [ ] Patient records
-- [ ] Treatment history
-- [ ] Billing & payments
+---
+
+## Seeded Users (fresh install)
+
+| Username | Password | Role |
+|----------|----------|------|
+| admin | admin123 | ADMIN |
+| dr.smith | dentist123 | DENTIST |
+| dr.jones | dentist123 | DENTIST |
+
+> Dummy dentists for testing — removed when Settings feature is built.
+
+---
+
+## Roles
+
+| Role | Permissions |
+|------|-------------|
+| ADMIN | Full access, manage staff, roles, delete |
+| DENTIST | Own appointments, treatments, patients |
+| STAFF | Appointments, patients, billing |
+
+---
+
+## Database
+
+- Version: 6, exportSchema: false
+- `fallbackToDestructiveMigration()` enabled — wipes DB if no migration path found (dev phase only; remove before launch)
+- Migration 1→2: patients table rebuilt
+- Migration 2→3: appointments table rebuilt with type + dentistId
+- Migration 3→4: treatments + visits + treatment_visit_cross_ref tables added
+- Migration 4→5: tables recreated without SQL DEFAULT clauses (Room schema fix) + paymentMode column on visits
+- Migration 5→6: force clean slate for any device with a broken version-5 schema (same drop+recreate)
+
+---
+
+## Data Loading Strategy
+
+### Phase 1 — Local (current)
+- Room + Kotlin Flow: reactive streams, emit only on DB writes → already "live cache"
+- ViewModels collect flows into StateFlow — data retained across recompositions
+- UI screens lazy-load via LazyColumn; data fetched only for the active screen
+- No explicit TTL needed: Room invalidates its query cache on writes, not time
+
+### Phase 2 — Backend
+- Repository layer will add an in-memory cache (Map + timestamp) per entity type
+- TTL default: 5 minutes. Stale check: `System.currentTimeMillis() - cachedAt > ttlMs`
+- Cache hit → return cached Flow. Cache miss / stale → network fetch → write to Room → Room flow emits
+- Room DB continues to serve as the persistent offline cache between sessions
+- `CacheManager` singleton (Hilt @Singleton) will hold the TTL map, injected into repositories
+
+---
+
+## Screen Structure
+
+```
+Login ✅
+└── Dashboard 🚧
+    ├── Appointments ✅
+    │   ├── List View ✅
+    │   ├── Calendar — Day View ✅
+    │   ├── Calendar — Week View ✅ (date strip + badge counts + day appointments)
+    │   ├── Calendar — Month View ✅ (grid + badge counts + day appointments)
+    │   ├── Add Appointment ✅
+    │   ├── Appointment Detail ✅ (Call, WhatsApp, status update)
+    │   └── Edit Appointment ✅ (disabled for Completed/Cancelled/No Show)
+    ├── Patients ✅
+    │   ├── Patient List ✅
+    │   ├── Add Patient ✅
+    │   └── Patient Detail ✅ (Overview, Treatments+Visits sectioned, Invoices placeholder)
+    │       ├── Treatments tab: Ongoing / Past sections (lazy LazyColumn)
+    │       ├── Add Treatment ✅
+    │       ├── Edit Treatment ✅
+    │       ├── Add Visit ✅ (payment mode: Cash/GPay/Bank Transfer)
+    │       └── Treatment Detail ✅
+    │           ├── Visits list with edit per visit ✅
+    │           ├── Edit Visit ✅
+    │           ├── Mark Complete (blocked if outstanding payment, FIFO allocation) ✅
+    │           ├── Cancel Treatment ✅
+    │           └── Reopen Treatment (for Completed + Cancelled) ✅
+    ├── Billing ⏳
+    ├── Reminders ⏳
+    └── Settings ⏳ (Admin only)
+```
+
+---
+
+## Patient Spec ✅
+
+- patientCode: starts at 10001, auto-incremented
+- Phone optional via checkbox "phone not available"
+- Guardian fields for minors (age < 18 from DOB)
+- Referral: dropdown + conditional detail field
+- Medical conditions, allergies optional
+
+## Appointments Spec ✅
+
+- Patient search: real-time by name, phone, ID
+- Dentist: dropdown of active DENTIST role users
+- Types: Consultation, Cleaning, Filling, Root Canal, Extraction, Braces, X-Ray, Whitening, Crown/Bridge, Other
+- Duration: 15/30/45/60/90 min
+- Statuses: Scheduled → Confirmed → In Progress → Completed/Cancelled/No Show
+- Edit disabled for closed statuses (Completed, Cancelled, No Show)
+- Call/WhatsApp: patient phone → guardian phone → disabled
+- Phone formatting: + prefix kept, 00→+, 0→+91, else prepend +91
+
+---
+
+## Roadmap
+
+### Phase 1 — MVP
+- [x] Repo + CI/CD
+- [x] Scaffolding
+- [x] Login + auth + roles
+- [x] Patients
+- [x] Appointments (list, calendar, add, edit, detail)
+- [x] Treatments + Visits (add, detail, status, payment mode, financial summary)
+- [ ] Dashboard stats
+- [ ] Billing & invoices
 - [ ] Push reminders
+- [ ] Settings — staff management
 
-### Tech Stack — Pending Decisions
-- **Language:** Kotlin ✅
-- **UI Framework:** TBD (Jetpack Compose vs XML)
-- **Architecture:** TBD (MVVM recommended)
-- **Local DB:** TBD (Room recommended)
-- **Backend/API:** TBD
-- **Auth:** TBD
+### Phase 2 — Cloud
+- [ ] PostgreSQL backend
+- [ ] Google OAuth
+- [ ] FCM push notifications
 
-### Progress
-- [ ] Project scaffolding
-- [ ] GitHub Actions setup
-- [ ] App architecture setup
-- [ ] Feature development
+### Phase 3 — Patient App
+- [ ] android/patient/ Kotlin app
+- [ ] Book, view records, pay
 
 ---
 
-## Patient App (Future)
+## Key Decisions
 
-- Separate Kotlin app in `android/patient/`
-- Public Play Store distribution
-- Features: book appointments, view own records, payments, notifications
-- Will share same backend as staff app
-
----
-
-## Dev Environment
-
-- Developer is currently **mobile only** (travelling)
-- Tools: Termux + Git on Android, GitHub Mobile App
-- Claude generates files → developer commits via Termux
-- PRs reviewed and merged via GitHub Mobile App
-- APK downloaded from GitHub Actions artifacts and installed directly
-
----
-
-## Key Decisions Made
-
-| Decision | Choice | Reason |
-|----------|--------|--------|
-| Monorepo | Yes | Simpler to manage, CI/CD handles isolation |
-| Single `main` branch | Yes | Path filters in CI/CD handle module isolation |
-| Staff & patient apps separate | Yes | Different users, security, distribution |
-| Start with staff app | Yes | Core clinic operations first |
-| Public repo during dev | Yes | Unlimited free CI/CD minutes |
+| Decision | Choice |
+|----------|--------|
+| Monorepo | Yes |
+| Single master branch | Yes — CI path filters handle isolation |
+| Staff/patient apps separate | Yes |
+| Jetpack Compose | Yes |
+| MVVM + Hilt + Room | Yes |
+| Patient code from 10001 | Yes |
+| Merge to develop after each feature | Yes — so Claude can read code |
+| Week view: date strip + count badges | Yes |
+| Month view: grid + count badges | Yes |
+| Edit disabled on closed status | Yes |
+| Treatment sections: Ongoing / Past | Yes |
+| fallbackToDestructiveMigration (dev) | Yes — remove before Play Store launch |
+| Phase 2 TTL cache default | 5 minutes, in-memory, per repository |
+| Edit visits | Yes — date, dentist, amount, payment mode, notes |
+| Edit treatments | Yes — all fields editable |
+| Reopen treatment | Yes — works for both Completed and Cancelled |
+| Payment gate on Mark Complete | Yes — FIFO allocation across linked treatments; blocks if outstanding > ₹0 |
+| FIFO payment allocation | Allocate visit payment to treatments sorted by startDate, then id |
+| Visits shown only in Treatment Detail | Yes — removed from PatientDetail TreatmentsTab |
 
 ---
 
-## Pending Decisions
+## Termux Commands
 
-- [ ] UI framework: Jetpack Compose vs XML Views
-- [ ] Architecture pattern: MVVM (recommended)
-- [ ] Local database: Room (recommended)
-- [ ] Backend language & framework
-- [ ] Authentication method
-- [ ] Cloud provider for backend
+```bash
+cd ~/storage/dentical_app
 
----
+# Unzip Claude output
+unzip ~/storage/downloads/filename.zip -d ~/scaffold_temp
+cp -r ~/scaffold_temp/dentical_app/* ~/storage/dentical_app/
+rm -rf ~/scaffold_temp
 
-## What's Next
+# Commit & push
+git add .
+git commit -m "feat: description"
+git push origin android/feature/scaffold
 
-1. Decide Android tech stack (Compose vs XML, architecture)
-2. Scaffold the staff app project structure
-3. Set up GitHub Actions Android build
-4. Begin first feature: Appointment Management
-
----
-
-## How to Use This File
-
-At the start of each new Claude session:
-1. Open this file
-2. Copy all content
-3. Paste as your first message to Claude
-4. Claude will have full context immediately
+# Merge to develop (after testing)
+git checkout develop
+git merge android/feature/scaffold
+git push origin develop
+```
 
 ---
 
-> Last updated: April 2026
+## Session Tips (Token Saving)
+
+- Start each session by sharing CLAUDE.md + relevant code files via + → Add from GitHub
+- State the feature and decisions upfront — no need to re-discuss
+- One session = one feature
+- For bug fixes just paste the error — say "fix it"
+- str_replace edits are cheaper than full file rewrites
+
+---
+
+> Last updated: April 2026 — Edit visits + edit treatments + reopen treatment + FIFO payment gate on Mark Complete; visits moved to Treatment Detail only; crash fix (duplicate LazyColumn keys)
