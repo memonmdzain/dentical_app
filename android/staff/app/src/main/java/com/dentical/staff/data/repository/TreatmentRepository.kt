@@ -115,6 +115,20 @@ class TreatmentRepository @Inject constructor(
         return maxOf(0.0, quotedCost - totalAllocated)
     }
 
+    /**
+     * Signed patient balance after cancelling [treatmentId] with [partialCharge] as the charge
+     * for work done so far. Negative = patient is owed a refund.
+     */
+    suspend fun computeCancellationBalance(treatmentId: Long, partialCharge: Double): Double {
+        val treatment = treatmentDao.getTreatmentById(treatmentId) ?: return 0.0
+        val patientId = treatment.patientId
+        val totalQuoted = treatmentDao.getTotalQuotedCostOnce(patientId)
+        val standaloneCharged = visitDao.getStandaloneVisitsTotalChargedOnce(patientId)
+        val totalPaid = visitDao.getTotalAmountPaidOnce(patientId)
+        val originalCost = treatment.quotedCost ?: 0.0
+        return (totalQuoted - originalCost + partialCharge + standaloneCharged) - totalPaid
+    }
+
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {
         return db.withTransaction {
             val visitId = visitDao.insertVisit(visit)

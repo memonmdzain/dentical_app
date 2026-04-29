@@ -25,7 +25,11 @@ data class TreatmentDetailUiState(
     val crossRefs: List<TreatmentVisitCrossRef> = emptyList(),
     val visitCount: Int = 0,
     val isLoading: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    val showCancelDialog: Boolean = false,
+    val cancelPartialCharge: String = "",
+    val cancelBalance: Double = 0.0,
+    val cancelConfirmRefundDone: Boolean = false
 )
 
 @HiltViewModel
@@ -79,11 +83,65 @@ class TreatmentDetailViewModel @Inject constructor(
         }
     }
 
-    fun cancelTreatment(treatmentId: Long) {
+    fun openCancelDialog() {
+        val treatment = _uiState.value.treatment ?: return
         viewModelScope.launch {
-            treatmentRepository.updateTreatmentStatus(treatmentId, TreatmentStatus.CANCELLED)
-            val updated = treatmentRepository.getTreatmentById(treatmentId)
-            _uiState.update { it.copy(treatment = updated) }
+            val chargeStr = treatment.quotedCost
+                ?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: ""
+            val chargeVal = treatment.quotedCost ?: 0.0
+            val balance = treatmentRepository.computeCancellationBalance(treatment.id, chargeVal)
+            _uiState.update {
+                it.copy(
+                    showCancelDialog = true,
+                    cancelPartialCharge = chargeStr,
+                    cancelBalance = balance,
+                    cancelConfirmRefundDone = false,
+                    error = null
+                )
+            }
+        }
+    }
+
+    fun onCancelPartialChargeChanged(amount: String) {
+        val treatment = _uiState.value.treatment ?: return
+        _uiState.update { it.copy(cancelPartialCharge = amount) }
+        viewModelScope.launch {
+            val charge = amount.toDoubleOrNull() ?: 0.0
+            val balance = treatmentRepository.computeCancellationBalance(treatment.id, charge)
+            _uiState.update { it.copy(cancelBalance = balance) }
+        }
+    }
+
+    fun onCancelConfirmRefundToggle(confirmed: Boolean) =
+        _uiState.update { it.copy(cancelConfirmRefundDone = confirmed) }
+
+    fun dismissCancelDialog() =
+        _uiState.update { it.copy(showCancelDialog = false, cancelConfirmRefundDone = false, error = null) }
+
+    fun confirmCancelTreatment() {
+        val state = _uiState.value
+        val treatment = state.treatment ?: return
+        val refundNeeded = state.cancelBalance < -0.01
+        if (refundNeeded && !state.cancelConfirmRefundDone) {
+            _uiState.update { it.copy(error = "Please confirm you have refunded the patient before cancelling.") }
+            return
+        }
+        viewModelScope.launch {
+            val partialCharge = state.cancelPartialCharge.toDoubleOrNull() ?: 0.0
+            val originalCost = treatment.quotedCost ?: 0.0
+            if (partialCharge != originalCost) {
+                treatmentRepository.updateTreatment(
+                    treatment.copy(
+                        quotedCost = partialCharge.takeIf { it > 0 },
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+            treatmentRepository.updateTreatmentStatus(treatment.id, TreatmentStatus.CANCELLED)
+            val updated = treatmentRepository.getTreatmentById(treatment.id)
+            _uiState.update {
+                it.copy(treatment = updated, showCancelDialog = false, cancelConfirmRefundDone = false)
+            }
         }
     }
 
