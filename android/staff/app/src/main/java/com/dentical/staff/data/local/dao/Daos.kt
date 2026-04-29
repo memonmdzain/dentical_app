@@ -96,10 +96,10 @@ interface TreatmentDao {
     @Query("SELECT * FROM treatments WHERE id = :id")
     suspend fun getTreatmentById(id: Long): TreatmentEntity?
 
-    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId AND status != 'CANCELLED'")
+    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId")
     fun getTotalQuotedCost(patientId: Long): Flow<Double>
 
-    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId AND status != 'CANCELLED'")
+    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId")
     suspend fun getTotalQuotedCostOnce(patientId: Long): Double
 
     @Insert(onConflict = OnConflictStrategy.ABORT)

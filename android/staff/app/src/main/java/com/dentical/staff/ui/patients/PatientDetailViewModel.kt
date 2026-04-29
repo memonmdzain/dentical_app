@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.PatientEntity
 import com.dentical.staff.data.local.entities.TreatmentEntity
+import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
 import com.dentical.staff.data.repository.PatientFinancialSummary
@@ -65,7 +66,9 @@ class PatientDetailViewModel @Inject constructor(
                 .catch { e -> _uiState.update { it.copy(error = "treatments: ${e.javaClass.simpleName}: ${e.message}") } }
                 .collect { treatments ->
                     val outstandings = treatments.associate { t ->
-                        t.id to treatmentRepository.calculateTreatmentOutstanding(t.id)
+                        t.id to if (t.status == TreatmentStatus.ONGOING)
+                            treatmentRepository.calculateTreatmentOutstanding(t.id)
+                        else 0.0
                     }
                     _uiState.update { it.copy(treatments = treatments, treatmentOutstandings = outstandings) }
                 }
