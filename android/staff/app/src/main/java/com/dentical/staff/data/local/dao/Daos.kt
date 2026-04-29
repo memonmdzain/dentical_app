@@ -122,6 +122,14 @@ interface VisitDao {
     """)
     fun getVisitsByTreatment(treatmentId: Long): Flow<List<VisitEntity>>
 
+    @Query("""
+        SELECT v.* FROM visits v
+        INNER JOIN treatment_visit_cross_ref tvr ON v.id = tvr.visitId
+        WHERE tvr.treatmentId = :treatmentId
+        ORDER BY v.visitDate ASC
+    """)
+    suspend fun getVisitsByTreatmentOnce(treatmentId: Long): List<VisitEntity>
+
     @Query("SELECT * FROM visits WHERE id = :id")
     suspend fun getVisitById(id: Long): VisitEntity?
 
@@ -155,6 +163,9 @@ interface TreatmentVisitCrossRefDao {
 
     @Query("SELECT * FROM treatment_visit_cross_ref WHERE visitId = :visitId")
     suspend fun getByVisitId(visitId: Long): List<TreatmentVisitCrossRef>
+
+    @Query("SELECT * FROM treatment_visit_cross_ref WHERE treatmentId = :treatmentId ORDER BY visitId ASC")
+    suspend fun getByTreatmentIdOnce(treatmentId: Long): List<TreatmentVisitCrossRef>
 
     @Query("SELECT * FROM treatment_visit_cross_ref WHERE treatmentId = :treatmentId ORDER BY visitId DESC")
     fun getByTreatmentId(treatmentId: Long): Flow<List<TreatmentVisitCrossRef>>

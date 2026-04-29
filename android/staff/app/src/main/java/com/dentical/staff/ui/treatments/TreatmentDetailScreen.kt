@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,8 @@ fun TreatmentDetailScreen(
     treatmentId: Long,
     onBack: () -> Unit,
     onAddVisit: () -> Unit,
+    onEditTreatment: () -> Unit,
+    onEditVisit: (visitId: Long) -> Unit,
     viewModel: TreatmentDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -43,6 +46,12 @@ fun TreatmentDetailScreen(
                 title = { Text(uiState.treatment?.procedure?.displayName ?: "Treatment") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
+                },
+                actions = {
+                    IconButton(onClick = onEditTreatment) {
+                        Icon(Icons.Default.Edit, "Edit treatment",
+                            tint = MaterialTheme.colorScheme.onPrimary)
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -85,8 +94,10 @@ fun TreatmentDetailScreen(
                             containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
                     ) {
-                        Column(modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -175,9 +186,28 @@ fun TreatmentDetailScreen(
                     }
                 }
 
-                // Status action buttons
-                if (treatment.status == TreatmentStatus.ONGOING) {
+                // Error card (payment outstanding)
+                uiState.error?.let { errorMsg ->
                     item {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                errorMsg,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+
+                // Status action buttons
+                when (treatment.status) {
+                    TreatmentStatus.ONGOING -> item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -188,29 +218,22 @@ fun TreatmentDetailScreen(
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = MaterialTheme.colorScheme.error
                                 )
-                            ) {
-                                Text("Cancel Treatment")
-                            }
+                            ) { Text("Cancel Treatment") }
                             Button(
                                 onClick = { viewModel.markComplete(treatment.id) },
                                 modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Mark Complete")
-                            }
+                            ) { Text("Mark Complete") }
                         }
                     }
-                } else if (treatment.status == TreatmentStatus.CANCELLED) {
-                    item {
+                    TreatmentStatus.COMPLETED, TreatmentStatus.CANCELLED -> item {
                         OutlinedButton(
                             onClick = { viewModel.reactivateTreatment(treatment.id) },
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Reactivate Treatment")
-                        }
+                        ) { Text("Reopen Treatment") }
                     }
                 }
 
-                // Visits section header
+                // Visits header
                 item {
                     Text(
                         "Visits (${uiState.visitCount})",
@@ -239,12 +262,12 @@ fun TreatmentDetailScreen(
                         TreatmentVisitCard(
                             visit = visit,
                             crossRef = crossRef,
-                            dateFormatter = dateFormatter
+                            dateFormatter = dateFormatter,
+                            onEdit = { onEditVisit(visit.id) }
                         )
                     }
                 }
 
-                // Bottom spacer for FAB
                 item { Spacer(Modifier.height(72.dp)) }
             }
         }
@@ -254,7 +277,7 @@ fun TreatmentDetailScreen(
         AlertDialog(
             onDismissRequest = { showCancelDialog = false },
             title = { Text("Cancel Treatment?") },
-            text = { Text("This will mark the treatment as cancelled. You can reactivate it later.") },
+            text = { Text("This will mark the treatment as cancelled. You can reopen it later.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -290,7 +313,8 @@ private fun DetailChip(text: String) {
 private fun TreatmentVisitCard(
     visit: VisitEntity,
     crossRef: TreatmentVisitCrossRef?,
-    dateFormatter: SimpleDateFormat
+    dateFormatter: SimpleDateFormat,
+    onEdit: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -307,42 +331,42 @@ private fun TreatmentVisitCard(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                if (visit.amountPaid > 0) {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = Color(0xFFE8F5E9)
-                    ) {
-                        val paidLabel = buildString {
-                            append("Paid ${formatCurrency(visit.amountPaid)}")
-                            visit.paymentMode?.let { append(" via ${it.displayName}") }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (visit.amountPaid > 0) {
+                        Surface(shape = MaterialTheme.shapes.small, color = Color(0xFFE8F5E9)) {
+                            val paidLabel = buildString {
+                                append("Paid ${formatCurrency(visit.amountPaid)}")
+                                visit.paymentMode?.let { append(" via ${it.displayName}") }
+                            }
+                            Text(
+                                paidLabel,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF2E7D32),
+                                fontWeight = FontWeight.Medium
+                            )
                         }
-                        Text(
-                            paidLabel,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32),
-                            fontWeight = FontWeight.Medium
-                        )
+                    }
+                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Edit, "Edit visit",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-            Text(
-                "By ${visit.performedBy}",
+            Text("By ${visit.performedBy}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (crossRef != null && crossRef.workDone.isNotBlank()) {
-                Text(
-                    crossRef.workDone,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Text(crossRef.workDone, style = MaterialTheme.typography.bodySmall)
             }
             if (!visit.notes.isNullOrBlank()) {
-                Text(
-                    visit.notes,
+                Text(visit.notes,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

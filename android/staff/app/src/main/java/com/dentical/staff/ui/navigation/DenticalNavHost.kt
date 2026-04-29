@@ -36,9 +36,17 @@ sealed class Screen(val route: String) {
         fun createRoute(patientId: Long, treatmentId: Long) =
             "patients/$patientId/treatments/$treatmentId"
     }
+    object EditTreatment : Screen("patients/{patientId}/treatments/{treatmentId}/edit") {
+        fun createRoute(patientId: Long, treatmentId: Long) =
+            "patients/$patientId/treatments/$treatmentId/edit"
+    }
     object AddVisit : Screen("patients/{patientId}/visits/new?preSelectedTreatmentId={preSelectedTreatmentId}") {
         fun createRoute(patientId: Long, preSelectedTreatmentId: Long = -1L) =
             "patients/$patientId/visits/new?preSelectedTreatmentId=$preSelectedTreatmentId"
+    }
+    object EditVisit : Screen("patients/{patientId}/visits/{visitId}/edit") {
+        fun createRoute(patientId: Long, visitId: Long) =
+            "patients/$patientId/visits/$visitId/edit"
     }
     object Billing : Screen("billing")
     object Reminders : Screen("reminders")
@@ -83,12 +91,8 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             PatientDetailScreen(
                 patientId = patientId,
                 onBack = { navController.popBackStack() },
-                onAddTreatment = {
-                    navController.navigate(Screen.AddTreatment.createRoute(patientId))
-                },
-                onAddVisit = {
-                    navController.navigate(Screen.AddVisit.createRoute(patientId))
-                },
+                onAddTreatment = { navController.navigate(Screen.AddTreatment.createRoute(patientId)) },
+                onAddVisit = { navController.navigate(Screen.AddVisit.createRoute(patientId)) },
                 onTreatmentClick = { treatmentId ->
                     navController.navigate(Screen.TreatmentDetail.createRoute(patientId, treatmentId))
                 }
@@ -157,10 +161,28 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
                 treatmentId = treatmentId,
                 onBack = { navController.popBackStack() },
                 onAddVisit = {
-                    navController.navigate(
-                        Screen.AddVisit.createRoute(patientId, treatmentId)
-                    )
+                    navController.navigate(Screen.AddVisit.createRoute(patientId, treatmentId))
+                },
+                onEditTreatment = {
+                    navController.navigate(Screen.EditTreatment.createRoute(patientId, treatmentId))
+                },
+                onEditVisit = { visitId ->
+                    navController.navigate(Screen.EditVisit.createRoute(patientId, visitId))
                 }
+            )
+        }
+        composable(
+            route = Screen.EditTreatment.route,
+            arguments = listOf(
+                navArgument("patientId") { type = NavType.LongType },
+                navArgument("treatmentId") { type = NavType.LongType }
+            )
+        ) {
+            val treatmentId = it.arguments?.getLong("treatmentId") ?: return@composable
+            EditTreatmentScreen(
+                treatmentId = treatmentId,
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
             )
         }
         composable(
@@ -178,6 +200,20 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             AddVisitScreen(
                 patientId = patientId,
                 preSelectedTreatmentId = preSelected,
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.EditVisit.route,
+            arguments = listOf(
+                navArgument("patientId") { type = NavType.LongType },
+                navArgument("visitId") { type = NavType.LongType }
+            )
+        ) {
+            val visitId = it.arguments?.getLong("visitId") ?: return@composable
+            EditVisitScreen(
+                visitId = visitId,
                 onSaved = { navController.popBackStack() },
                 onBack = { navController.popBackStack() }
             )

@@ -81,6 +81,37 @@ class TreatmentRepository @Inject constructor(
         )
     }
 
+    suspend fun getVisitById(visitId: Long): VisitEntity? = visitDao.getVisitById(visitId)
+
+    suspend fun updateVisit(visit: VisitEntity) = visitDao.updateVisit(visit)
+
+    /**
+     * FIFO allocation: amountPaid on a visit is allocated to its linked treatments in
+     * startDate order (earliest first). Returns unpaid balance for the given treatment,
+     * or 0.0 if no quotedCost is set.
+     */
+    suspend fun calculateTreatmentOutstanding(treatmentId: Long): Double {
+        val treatment = treatmentDao.getTreatmentById(treatmentId) ?: return 0.0
+        val quotedCost = treatment.quotedCost ?: return 0.0
+        val visits = visitDao.getVisitsByTreatmentOnce(treatmentId)
+        var totalAllocated = 0.0
+        for (visit in visits) {
+            val visitCrossRefs = crossRefDao.getByVisitId(visit.id)
+            val visitTreatments = visitCrossRefs
+                .mapNotNull { treatmentDao.getTreatmentById(it.treatmentId) }
+                .sortedWith(compareBy({ it.startDate }, { it.id }))
+            var remaining = visit.amountPaid
+            for (t in visitTreatments) {
+                val cost = t.quotedCost ?: continue
+                val allocated = minOf(remaining, cost)
+                if (t.id == treatmentId) { totalAllocated += allocated; break }
+                remaining -= allocated
+                if (remaining <= 0.0) break
+            }
+        }
+        return maxOf(0.0, quotedCost - totalAllocated)
+    }
+
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {
         val visitId = visitDao.insertVisit(visit)
         treatmentLinks.forEach { (treatmentId, workDone) ->

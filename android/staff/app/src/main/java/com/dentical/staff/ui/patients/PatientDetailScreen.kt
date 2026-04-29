@@ -19,8 +19,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.dentical.staff.data.local.entities.PatientEntity
 import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.TreatmentStatus
-import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
-import com.dentical.staff.data.local.entities.VisitEntity
 import com.dentical.staff.data.repository.PatientFinancialSummary
 import com.dentical.staff.util.PhoneUtil
 import java.text.NumberFormat
@@ -213,8 +211,6 @@ fun PatientDetailScreen(
                     1 -> TreatmentsTab(
                         patient = patient,
                         treatments = uiState.treatments,
-                        visits = uiState.visits,
-                        visitCrossRefs = uiState.visitCrossRefs,
                         financialSummary = uiState.financialSummary,
                         onAddTreatment = onAddTreatment,
                         onAddVisit = onAddVisit,
@@ -231,8 +227,6 @@ fun PatientDetailScreen(
 fun TreatmentsTab(
     patient: PatientEntity,
     treatments: List<TreatmentEntity>,
-    visits: List<VisitEntity>,
-    visitCrossRefs: Map<Long, List<TreatmentVisitCrossRef>>,
     financialSummary: PatientFinancialSummary,
     onAddTreatment: () -> Unit,
     onAddVisit: () -> Unit,
@@ -240,7 +234,6 @@ fun TreatmentsTab(
 ) {
     val context = LocalContext.current
     val dateFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-    val hasData = treatments.isNotEmpty() || visits.isNotEmpty()
     val phone = patient.phone ?: patient.guardianPhone
 
     LazyColumn(
@@ -249,7 +242,7 @@ fun TreatmentsTab(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Financial summary card
-        if (hasData) {
+        if (treatments.isNotEmpty()) {
             item {
                 FinancialSummaryCard(
                     financialSummary = financialSummary,
@@ -266,83 +259,47 @@ fun TreatmentsTab(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
-                    onClick = onAddVisit,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null,
-                        modifier = Modifier.size(16.dp))
+                OutlinedButton(onClick = onAddVisit, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Add Visit")
                 }
-                Button(
-                    onClick = onAddTreatment,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null,
-                        modifier = Modifier.size(16.dp))
+                Button(onClick = onAddTreatment, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Add Treatment")
                 }
             }
         }
 
-        // Visits section
-        if (visits.isNotEmpty()) {
-            item {
-                SectionHeader("Visits (${visits.size})", modifier = Modifier.padding(top = 4.dp))
-            }
-            items(visits, key = { "v${it.id}" }) { visit ->
-                val linkedTreatments = visitCrossRefs[visit.id] ?: emptyList()
-                VisitCard(
-                    visit = visit,
-                    linkedTreatments = linkedTreatments,
-                    allTreatments = treatments,
-                    dateFormatter = dateFormatter
-                )
-            }
-        }
-
         // Ongoing treatments section
         val ongoingTreatments = treatments.filter { it.status == TreatmentStatus.ONGOING }
         if (ongoingTreatments.isNotEmpty()) {
-            item {
-                SectionHeader("Ongoing Treatments (${ongoingTreatments.size})", modifier = Modifier.padding(top = 4.dp))
-            }
+            item { SectionHeader("Ongoing Treatments (${ongoingTreatments.size})", modifier = Modifier.padding(top = 4.dp)) }
             items(ongoingTreatments, key = { "t${it.id}" }) { treatment ->
-                TreatmentCard(
-                    treatment = treatment,
-                    dateFormatter = dateFormatter,
-                    onClick = { onTreatmentClick(treatment.id) }
-                )
+                TreatmentCard(treatment = treatment, dateFormatter = dateFormatter,
+                    onClick = { onTreatmentClick(treatment.id) })
             }
         }
 
         // Past treatments section (Completed + Cancelled)
         val pastTreatments = treatments.filter { it.status != TreatmentStatus.ONGOING }
         if (pastTreatments.isNotEmpty()) {
-            item {
-                SectionHeader("Past Treatments (${pastTreatments.size})", modifier = Modifier.padding(top = 4.dp))
-            }
+            item { SectionHeader("Past Treatments (${pastTreatments.size})", modifier = Modifier.padding(top = 4.dp)) }
             items(pastTreatments, key = { "t${it.id}" }) { treatment ->
-                TreatmentCard(
-                    treatment = treatment,
-                    dateFormatter = dateFormatter,
-                    onClick = { onTreatmentClick(treatment.id) }
-                )
+                TreatmentCard(treatment = treatment, dateFormatter = dateFormatter,
+                    onClick = { onTreatmentClick(treatment.id) })
             }
         }
 
         // Empty state
-        if (!hasData) {
+        if (treatments.isEmpty()) {
             item {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 48.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No treatments or visits yet",
+                    Text("No treatments yet. Tap Add Treatment to get started.",
                         color = MaterialTheme.colorScheme.outline)
                 }
             }
@@ -443,89 +400,6 @@ private fun FinancialFigure(label: String, amount: Double, color: Color) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
-}
-
-@Composable
-private fun VisitCard(
-    visit: VisitEntity,
-    linkedTreatments: List<TreatmentVisitCrossRef>,
-    allTreatments: List<TreatmentEntity>,
-    dateFormatter: SimpleDateFormat
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    dateFormatter.format(Date(visit.visitDate)),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                if (visit.amountPaid > 0) {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = Color(0xFFE8F5E9)
-                    ) {
-                        val paidLabel = buildString {
-                            append("Paid ${formatCurrency(visit.amountPaid)}")
-                            visit.paymentMode?.let { append(" via ${it.displayName}") }
-                        }
-                        Text(
-                            paidLabel,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-            Text(
-                "By ${visit.performedBy}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (linkedTreatments.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                linkedTreatments.forEach { crossRef ->
-                    val treatment = allTreatments.find { it.id == crossRef.treatmentId }
-                    if (treatment != null) {
-                        Row(verticalAlignment = Alignment.Top) {
-                            Text(
-                                "· ${treatment.procedure.displayName}${treatment.toothNumber?.let { " (#$it)" } ?: ""}: ",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                crossRef.workDone,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            } else {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (visit.costCharged > 0) "Charged ${formatCurrency(visit.costCharged)}"
-                    else "No treatments linked",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (!visit.notes.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    visit.notes,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 

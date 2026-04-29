@@ -24,7 +24,8 @@ data class TreatmentDetailUiState(
     val visits: List<VisitEntity> = emptyList(),
     val crossRefs: List<TreatmentVisitCrossRef> = emptyList(),
     val visitCount: Int = 0,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val error: String? = null
 )
 
 @HiltViewModel
@@ -63,8 +64,15 @@ class TreatmentDetailViewModel @Inject constructor(
 
     fun markComplete(treatmentId: Long) {
         viewModelScope.launch {
+            _uiState.update { it.copy(error = null) }
+            val outstanding = treatmentRepository.calculateTreatmentOutstanding(treatmentId)
+            if (outstanding > 0.01) {
+                _uiState.update {
+                    it.copy(error = "Cannot complete: ₹${outstanding.toLong()} outstanding. Settle payment first.")
+                }
+                return@launch
+            }
             treatmentRepository.updateTreatmentStatus(treatmentId, TreatmentStatus.COMPLETED)
-            // Refresh
             val updated = treatmentRepository.getTreatmentById(treatmentId)
             _uiState.update { it.copy(treatment = updated) }
         }
@@ -82,7 +90,9 @@ class TreatmentDetailViewModel @Inject constructor(
         viewModelScope.launch {
             treatmentRepository.updateTreatmentStatus(treatmentId, TreatmentStatus.ONGOING)
             val updated = treatmentRepository.getTreatmentById(treatmentId)
-            _uiState.update { it.copy(treatment = updated) }
+            _uiState.update { it.copy(treatment = updated, error = null) }
         }
     }
+
+    fun dismissError() = _uiState.update { it.copy(error = null) }
 }
