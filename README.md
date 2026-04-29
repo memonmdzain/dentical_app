@@ -60,13 +60,16 @@ android/feature/xxx
 
 ### Staff & Admin App (`android/staff/`)
 Internal app for clinic staff. Distributed as private APK.
-- Appointment management
-- Patient records
-- Treatment history + visits (add, edit, payment mode: Cash/GPay/Bank Transfer)
-- Treatment detail with visit list, edit treatment, reopen completed/cancelled treatment
-- Payment gate on completion (FIFO allocation across linked treatments)
-- Billing & payments
-- Push reminders
+- Appointment management (list, calendar day/week/month, add, edit, detail)
+- Patient records with financial summary (Total Billed / Paid / Outstanding)
+- Treatments: add, edit, ongoing/past sections, standalone visits section
+- Visits: add (Cash/GPay/Bank Transfer), edit; overpayment blocked at entry
+- Treatment detail: full visit history, per-visit edit
+- Cancel treatment: partial charge dialog, live patient balance preview, refund confirmation; refund auto-recorded as negative payment
+- Mark Complete: confirmation dialog + payment gate (FIFO allocation across linked treatments)
+- Reopen treatment: prompts to confirm and update quoted cost
+- Billing & payments (planned)
+- Push reminders (planned)
 
 ### Patient App (`android/patient/`) — Planned
 Public app for patients. Distributed via Play Store.

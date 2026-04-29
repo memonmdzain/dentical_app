@@ -93,7 +93,7 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`claude/add-treatments-visits-poE0P` — pushed, ready to merge into `android/feature/treatments-visits` then `develop`
+`treatment-and-visit-bugfix` — pushed, ready to merge into `develop`
 
 ---
 
@@ -191,16 +191,17 @@ Login ✅
     │   ├── Patient List ✅
     │   ├── Add Patient ✅
     │   └── Patient Detail ✅ (Overview, Treatments+Visits sectioned, Invoices placeholder)
-    │       ├── Treatments tab: Ongoing / Past sections (lazy LazyColumn)
+    │       ├── Treatments tab: Ongoing / Past sections + Standalone Visits section ✅
     │       ├── Add Treatment ✅
     │       ├── Edit Treatment ✅
-    │       ├── Add Visit ✅ (payment mode: Cash/GPay/Bank Transfer)
+    │       ├── Add Visit ✅ (payment mode: Cash/GPay/Bank Transfer; blocks overpayment)
     │       └── Treatment Detail ✅
     │           ├── Visits list with edit per visit ✅
     │           ├── Edit Visit ✅
-    │           ├── Mark Complete (blocked if outstanding payment, FIFO allocation) ✅
-    │           ├── Cancel Treatment ✅
-    │           └── Reopen Treatment (for Completed + Cancelled) ✅
+    │           ├── Mark Complete (confirmation dialog + payment gate + FIFO) ✅
+    │           ├── Cancel Treatment (partial charge dialog + live balance + refund checkbox) ✅
+    │           │   └── Refund auto-recorded as negative amountPaid visit
+    │           └── Reopen Treatment (quoted cost dialog as confirmation) ✅
     ├── Billing ⏳
     ├── Reminders ⏳
     └── Settings ⏳ (Admin only)
@@ -277,6 +278,16 @@ Login ✅
 | Payment gate on Mark Complete | Yes — FIFO allocation across linked treatments; blocks if outstanding > ₹0 |
 | FIFO payment allocation | Allocate visit payment to treatments sorted by startDate, then id |
 | Visits shown only in Treatment Detail | Yes — removed from PatientDetail TreatmentsTab |
+| Standalone visits in PatientDetail | Yes — shown in a dedicated section in the Treatments tab |
+| Add Visit overpayment prevention | Yes — amountPaid blocked if it exceeds remaining outstanding across linked treatments |
+| Cancel treatment flow | Partial charge dialog (blank default) → live signed balance preview → refund checkbox if balance < 0 |
+| Refund recording | Negative amountPaid visit linked to cancelled treatment; reduces SUM(amountPaid) in financial summary |
+| Cancelled treatments in Total Billed | Yes — quotedCost included regardless of status (no status filter on SUM) |
+| FIFO includes completed/cancelled | Yes — skips only null-cost (cancelled at ₹0); all others participate in allocation |
+| Outstanding badge recomputation | Triggered by both treatment and visit changes in PatientDetailViewModel |
+| Mark Complete confirmation | Yes — confirmation dialog before executing; payment gate runs after confirm |
+| Reopen Treatment confirmation | Yes — quoted cost dialog acts as the confirmation step |
+| Reopen prompts for quoted cost | Yes — pre-filled with current value (blank if none); staff can update before reopening |
 
 ---
 
@@ -313,4 +324,4 @@ git push origin develop
 
 ---
 
-> Last updated: April 2026 — Edit visits + edit treatments + reopen treatment + FIFO payment gate on Mark Complete; visits moved to Treatment Detail only; crash fix (duplicate LazyColumn keys)
+> Last updated: April 2026 — treatment-and-visit-bugfix: overpayment prevention on Add Visit; standalone visits section in PatientDetail; cancel treatment with partial charge, live balance, refund dialog, and auto negative-payment visit; cancelled treatments included in Total Billed; outstanding badge reactive to visit changes; Mark Complete confirmation dialog; Reopen Treatment prompts for quoted cost
