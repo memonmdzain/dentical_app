@@ -27,28 +27,29 @@ object DatabaseModule {
         )
         .addMigrations(
             DenticalDatabase.MIGRATION_1_2,
-            DenticalDatabase.MIGRATION_2_3
+            DenticalDatabase.MIGRATION_2_3,
+            DenticalDatabase.MIGRATION_3_4,
+            DenticalDatabase.MIGRATION_4_5,
+            DenticalDatabase.MIGRATION_5_6
         )
+        .fallbackToDestructiveMigration()
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
                 val now = System.currentTimeMillis()
 
-                // Seed default admin
                 val adminHash = PasswordUtil.hash("admin123")
                 db.execSQL(
                     "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
                     "VALUES ('admin', '$adminHash', 'Administrator', 'ADMIN', 1, $now)"
                 )
 
-                // Seed dummy dentist for testing
                 val dentistHash = PasswordUtil.hash("dentist123")
                 db.execSQL(
                     "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
                     "VALUES ('dr.smith', '$dentistHash', 'Dr. John Smith', 'DENTIST', 1, $now)"
                 )
 
-                // Seed second dummy dentist
                 val dentist2Hash = PasswordUtil.hash("dentist123")
                 db.execSQL(
                     "INSERT INTO users (username, passwordHash, fullName, role, isActive, createdAt) " +
@@ -63,5 +64,7 @@ object DatabaseModule {
     @Provides fun providePatientDao(db: DenticalDatabase) = db.patientDao()
     @Provides fun provideAppointmentDao(db: DenticalDatabase) = db.appointmentDao()
     @Provides fun provideTreatmentDao(db: DenticalDatabase) = db.treatmentDao()
+    @Provides fun provideVisitDao(db: DenticalDatabase) = db.visitDao()
+    @Provides fun provideTreatmentVisitCrossRefDao(db: DenticalDatabase) = db.treatmentVisitCrossRefDao()
     @Provides fun provideInvoiceDao(db: DenticalDatabase) = db.invoiceDao()
 }

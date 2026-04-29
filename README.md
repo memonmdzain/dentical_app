@@ -49,13 +49,22 @@ android/feature/xxx
        main   ←── Auto builds release APK + tags version
 ```
 
+## Data Loading Strategy
+
+| Phase | Approach |
+|-------|----------|
+| Phase 1 (local) | Room + Kotlin Flow — reactive streams, emit on DB write only. ViewModels cache latest value in StateFlow. UI uses LazyColumn for on-demand rendering. |
+| Phase 2 (backend) | Repository-layer in-memory cache with 5-minute TTL. Cache hit → return cached data. Stale → network fetch → write Room → Flow emits update. Room DB remains the offline/persistent cache. |
+
 ## Apps
 
 ### Staff & Admin App (`android/staff/`)
 Internal app for clinic staff. Distributed as private APK.
 - Appointment management
 - Patient records
-- Treatment history
+- Treatment history + visits (add, edit, payment mode: Cash/GPay/Bank Transfer)
+- Treatment detail with visit list, edit treatment, reopen completed/cancelled treatment
+- Payment gate on completion (FIFO allocation across linked treatments)
 - Billing & payments
 - Push reminders
 

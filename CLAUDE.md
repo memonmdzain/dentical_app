@@ -50,10 +50,11 @@ android/staff/app/src/main/java/com/dentical/staff/
 │   │   │   ├── AppointmentEntity.kt (type enum + dentistId)
 │   │   │   └── TreatmentAndInvoiceEntities.kt
 │   │   ├── Converters.kt
-│   │   └── DenticalDatabase.kt     (version 3, exportSchema=false)
+│   │   └── DenticalDatabase.kt     (version 6, exportSchema=false)
 │   └── repository/
 │       ├── PatientRepository.kt
-│       └── AppointmentRepository.kt
+│       ├── AppointmentRepository.kt
+│       └── TreatmentRepository.kt
 ├── di/DatabaseModule.kt
 ├── ui/
 │   ├── theme/
@@ -92,7 +93,7 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`android/feature/scaffold` — ready to merge to develop after appointments test
+`claude/add-treatments-visits-poE0P` — pushed, ready to merge into `android/feature/treatments-visits` then `develop`
 
 ---
 
@@ -146,9 +147,30 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 
 ## Database
 
-- Version: 3, exportSchema: false
+- Version: 6, exportSchema: false
+- `fallbackToDestructiveMigration()` enabled — wipes DB if no migration path found (dev phase only; remove before launch)
 - Migration 1→2: patients table rebuilt
 - Migration 2→3: appointments table rebuilt with type + dentistId
+- Migration 3→4: treatments + visits + treatment_visit_cross_ref tables added
+- Migration 4→5: tables recreated without SQL DEFAULT clauses (Room schema fix) + paymentMode column on visits
+- Migration 5→6: force clean slate for any device with a broken version-5 schema (same drop+recreate)
+
+---
+
+## Data Loading Strategy
+
+### Phase 1 — Local (current)
+- Room + Kotlin Flow: reactive streams, emit only on DB writes → already "live cache"
+- ViewModels collect flows into StateFlow — data retained across recompositions
+- UI screens lazy-load via LazyColumn; data fetched only for the active screen
+- No explicit TTL needed: Room invalidates its query cache on writes, not time
+
+### Phase 2 — Backend
+- Repository layer will add an in-memory cache (Map + timestamp) per entity type
+- TTL default: 5 minutes. Stale check: `System.currentTimeMillis() - cachedAt > ttlMs`
+- Cache hit → return cached Flow. Cache miss / stale → network fetch → write to Room → Room flow emits
+- Room DB continues to serve as the persistent offline cache between sessions
+- `CacheManager` singleton (Hilt @Singleton) will hold the TTL map, injected into repositories
 
 ---
 
@@ -168,7 +190,17 @@ Login ✅
     ├── Patients ✅
     │   ├── Patient List ✅
     │   ├── Add Patient ✅
-    │   └── Patient Detail ✅ (Overview, Treatments placeholder, Invoices placeholder)
+    │   └── Patient Detail ✅ (Overview, Treatments+Visits sectioned, Invoices placeholder)
+    │       ├── Treatments tab: Ongoing / Past sections (lazy LazyColumn)
+    │       ├── Add Treatment ✅
+    │       ├── Edit Treatment ✅
+    │       ├── Add Visit ✅ (payment mode: Cash/GPay/Bank Transfer)
+    │       └── Treatment Detail ✅
+    │           ├── Visits list with edit per visit ✅
+    │           ├── Edit Visit ✅
+    │           ├── Mark Complete (blocked if outstanding payment, FIFO allocation) ✅
+    │           ├── Cancel Treatment ✅
+    │           └── Reopen Treatment (for Completed + Cancelled) ✅
     ├── Billing ⏳
     ├── Reminders ⏳
     └── Settings ⏳ (Admin only)
@@ -205,8 +237,8 @@ Login ✅
 - [x] Login + auth + roles
 - [x] Patients
 - [x] Appointments (list, calendar, add, edit, detail)
+- [x] Treatments + Visits (add, detail, status, payment mode, financial summary)
 - [ ] Dashboard stats
-- [ ] Treatment history
 - [ ] Billing & invoices
 - [ ] Push reminders
 - [ ] Settings — staff management
@@ -236,6 +268,15 @@ Login ✅
 | Week view: date strip + count badges | Yes |
 | Month view: grid + count badges | Yes |
 | Edit disabled on closed status | Yes |
+| Treatment sections: Ongoing / Past | Yes |
+| fallbackToDestructiveMigration (dev) | Yes — remove before Play Store launch |
+| Phase 2 TTL cache default | 5 minutes, in-memory, per repository |
+| Edit visits | Yes — date, dentist, amount, payment mode, notes |
+| Edit treatments | Yes — all fields editable |
+| Reopen treatment | Yes — works for both Completed and Cancelled |
+| Payment gate on Mark Complete | Yes — FIFO allocation across linked treatments; blocks if outstanding > ₹0 |
+| FIFO payment allocation | Allocate visit payment to treatments sorted by startDate, then id |
+| Visits shown only in Treatment Detail | Yes — removed from PatientDetail TreatmentsTab |
 
 ---
 
@@ -272,4 +313,4 @@ git push origin develop
 
 ---
 
-> Last updated: April 2026 — Appointments complete (list, calendar week/month, add, edit, detail)
+> Last updated: April 2026 — Edit visits + edit treatments + reopen treatment + FIFO payment gate on Mark Complete; visits moved to Treatment Detail only; crash fix (duplicate LazyColumn keys)
