@@ -29,7 +29,9 @@ data class TreatmentDetailUiState(
     val showCancelDialog: Boolean = false,
     val cancelPartialCharge: String = "",
     val cancelBalance: Double = 0.0,
-    val cancelConfirmRefundDone: Boolean = false
+    val cancelConfirmRefundDone: Boolean = false,
+    val showReopenDialog: Boolean = false,
+    val reopenQuotedCost: String = ""
 )
 
 @HiltViewModel
@@ -161,11 +163,32 @@ class TreatmentDetailViewModel @Inject constructor(
         }
     }
 
-    fun reactivateTreatment(treatmentId: Long) {
+    fun openReopenDialog() {
+        val treatment = _uiState.value.treatment ?: return
+        val costStr = treatment.quotedCost
+            ?.toBigDecimal()?.stripTrailingZeros()?.toPlainString() ?: ""
+        _uiState.update { it.copy(showReopenDialog = true, reopenQuotedCost = costStr, error = null) }
+    }
+
+    fun onReopenQuotedCostChanged(value: String) =
+        _uiState.update { it.copy(reopenQuotedCost = value) }
+
+    fun dismissReopenDialog() =
+        _uiState.update { it.copy(showReopenDialog = false, error = null) }
+
+    fun confirmReopenTreatment() {
+        val state = _uiState.value
+        val treatment = state.treatment ?: return
         viewModelScope.launch {
-            treatmentRepository.updateTreatmentStatus(treatmentId, TreatmentStatus.ONGOING)
-            val updated = treatmentRepository.getTreatmentById(treatmentId)
-            _uiState.update { it.copy(treatment = updated, error = null) }
+            val newCost = state.reopenQuotedCost.toDoubleOrNull()
+            if (newCost != treatment.quotedCost) {
+                treatmentRepository.updateTreatment(
+                    treatment.copy(quotedCost = newCost, updatedAt = System.currentTimeMillis())
+                )
+            }
+            treatmentRepository.updateTreatmentStatus(treatment.id, TreatmentStatus.ONGOING)
+            val updated = treatmentRepository.getTreatmentById(treatment.id)
+            _uiState.update { it.copy(treatment = updated, showReopenDialog = false, error = null) }
         }
     }
 

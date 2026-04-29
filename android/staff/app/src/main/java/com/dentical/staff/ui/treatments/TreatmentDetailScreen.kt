@@ -228,7 +228,7 @@ fun TreatmentDetailScreen(
                     }
                     TreatmentStatus.COMPLETED, TreatmentStatus.CANCELLED -> item {
                         OutlinedButton(
-                            onClick = { viewModel.reactivateTreatment(treatment.id) },
+                            onClick = { viewModel.openReopenDialog() },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Reopen Treatment") }
                     }
@@ -372,6 +372,47 @@ fun TreatmentDetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissCancelDialog() }) { Text("Keep") }
+            }
+        )
+    }
+
+    if (uiState.showReopenDialog) {
+        val treatment = uiState.treatment
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissReopenDialog() },
+            title = { Text("Reopen Treatment") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (treatment != null) {
+                        val label = buildString {
+                            append(treatment.procedure.displayName)
+                            treatment.toothNumber?.let { append(" · Tooth #$it") }
+                        }
+                        Text(label, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(
+                        "Update the quoted cost for this treatment:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = uiState.reopenQuotedCost,
+                        onValueChange = { viewModel.onReopenQuotedCostChanged(it) },
+                        label = { Text("Quoted cost ₹") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("Leave blank if not set") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmReopenTreatment() }) {
+                    Text("Reopen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissReopenDialog() }) { Text("Cancel") }
             }
         )
     }
