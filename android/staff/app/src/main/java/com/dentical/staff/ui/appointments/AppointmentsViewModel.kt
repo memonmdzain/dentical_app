@@ -43,6 +43,10 @@ class AppointmentsViewModel @Inject constructor(
     private val patientRepository: PatientRepository
 ) : ViewModel() {
 
+    init {
+        viewModelScope.launch { appointmentRepository.pullFromSupabase() }
+    }
+
     private val _viewMode = MutableStateFlow(AppointmentViewMode.LIST)
     private val _calendarViewType = MutableStateFlow(CalendarViewType.DAY)
     private val _selectedDate = MutableStateFlow(todayStartMillis())

@@ -1,9 +1,12 @@
 package com.dentical.staff.data.repository
 
+import android.util.Log
 import com.dentical.staff.data.local.dao.PatientDao
 import com.dentical.staff.data.local.entities.PatientEntity
+import com.dentical.staff.data.remote.PatientDto
 import com.dentical.staff.data.remote.SupabaseSyncHelper
 import com.dentical.staff.data.remote.toDto
+import com.dentical.staff.data.remote.toEntity
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -41,5 +44,15 @@ class PatientRepository @Inject constructor(
     suspend fun deletePatient(patient: PatientEntity) {
         patientDao.deletePatient(patient)
         sync.delete("patients", patient.id)
+    }
+
+    suspend fun pullFromSupabase() {
+        if (!sync.isConnected) return
+        try {
+            val dtos = sync.supabase.from("patients").select().decodeList<PatientDto>()
+            patientDao.upsertAll(dtos.map { it.toEntity() })
+        } catch (e: Exception) {
+            Log.e("SupabaseSync", "Pull patients failed", e)
+        }
     }
 }

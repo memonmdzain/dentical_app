@@ -22,6 +22,10 @@ class PatientListViewModel @Inject constructor(
     private val repository: PatientRepository
 ) : ViewModel() {
 
+    init {
+        viewModelScope.launch { repository.pullFromSupabase() }
+    }
+
     private val _searchQuery = MutableStateFlow("")
     private val _isLoading = MutableStateFlow(true)
 

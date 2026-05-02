@@ -51,6 +51,8 @@ class PatientDetailViewModel @Inject constructor(
         if (loadedPatientId == id) return
         loadedPatientId = id
 
+        viewModelScope.launch { treatmentRepository.pullForPatient(id) }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {

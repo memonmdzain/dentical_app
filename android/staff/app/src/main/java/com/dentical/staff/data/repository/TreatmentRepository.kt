@@ -9,9 +9,13 @@ import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
+import android.util.Log
 import com.dentical.staff.data.remote.SupabaseSyncHelper
+import com.dentical.staff.data.remote.TreatmentDto
 import com.dentical.staff.data.remote.TreatmentVisitCrossRefDto
+import com.dentical.staff.data.remote.VisitDto
 import com.dentical.staff.data.remote.toDto
+import com.dentical.staff.data.remote.toEntity
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -178,6 +182,30 @@ class TreatmentRepository @Inject constructor(
         val totalPaid = visitDao.getTotalAmountPaidOnce(patientId)
         val originalCost = treatment.quotedCost ?: 0.0
         return (totalQuoted - originalCost + partialCharge + standaloneCharged) - totalPaid
+    }
+
+    suspend fun pullForPatient(patientId: Long) {
+        if (!sync.isConnected) return
+        try {
+            val treatmentDtos = sync.supabase.from("treatments").select {
+                filter { eq("patient_id", patientId) }
+            }.decodeList<TreatmentDto>()
+            treatmentDao.upsertAll(treatmentDtos.map { it.toEntity() })
+
+            val visitDtos = sync.supabase.from("visits").select {
+                filter { eq("patient_id", patientId) }
+            }.decodeList<VisitDto>()
+            visitDao.upsertAll(visitDtos.map { it.toEntity() })
+
+            treatmentDtos.forEach { treatment ->
+                val crossRefDtos = sync.supabase.from("treatment_visit_cross_ref").select {
+                    filter { eq("treatment_id", treatment.id) }
+                }.decodeList<TreatmentVisitCrossRefDto>()
+                crossRefDao.upsertAll(crossRefDtos.map { it.toEntity() })
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseSync", "Pull for patient $patientId failed", e)
+        }
     }
 
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {

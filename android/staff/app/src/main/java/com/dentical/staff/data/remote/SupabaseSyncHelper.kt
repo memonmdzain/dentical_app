@@ -16,6 +16,8 @@ class SupabaseSyncHelper @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     @ApplicationScope val scope: CoroutineScope
 ) {
+    val isConnected: Boolean get() = networkMonitor.isConnected
+
     fun fireAndForget(block: suspend () -> Unit) {
         if (!networkMonitor.isConnected) return
         scope.launch {

@@ -1,12 +1,15 @@
 package com.dentical.staff.data.repository
 
+import android.util.Log
 import com.dentical.staff.data.local.dao.AppointmentDao
 import com.dentical.staff.data.local.dao.UserDao
 import com.dentical.staff.data.local.entities.AppointmentEntity
 import com.dentical.staff.data.local.entities.AppointmentStatus
 import com.dentical.staff.data.local.entities.UserEntity
+import com.dentical.staff.data.remote.AppointmentDto
 import com.dentical.staff.data.remote.SupabaseSyncHelper
 import com.dentical.staff.data.remote.toDto
+import com.dentical.staff.data.remote.toEntity
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import java.util.Calendar
@@ -68,5 +71,15 @@ class AppointmentRepository @Inject constructor(
         val updated = appointment.copy(updatedAt = System.currentTimeMillis())
         appointmentDao.updateAppointment(updated)
         sync.fireAndForget { sync.supabase.from("appointments").upsert(updated.toDto()) }
+    }
+
+    suspend fun pullFromSupabase() {
+        if (!sync.isConnected) return
+        try {
+            val dtos = sync.supabase.from("appointments").select().decodeList<AppointmentDto>()
+            appointmentDao.upsertAll(dtos.map { it.toEntity() })
+        } catch (e: Exception) {
+            Log.e("SupabaseSync", "Pull appointments failed", e)
+        }
     }
 }
