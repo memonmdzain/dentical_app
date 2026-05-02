@@ -19,12 +19,14 @@ class SupabaseSyncHelper @Inject constructor(
     fun fireAndForget(block: suspend () -> Unit) {
         if (!networkMonitor.isConnected) return
         scope.launch {
-            runCatching(block)
-                .onFailure { Log.e("SupabaseSync", "Supabase sync failed", it) }
+            try { block() }
+            catch (e: Exception) { Log.e("SupabaseSync", "Supabase sync failed", e) }
         }
     }
 
     fun delete(table: String, id: Long) = fireAndForget {
-        supabase.from(table).delete { eq("id", id) }
+        supabase.from(table).delete {
+            filter { eq("id", id) }
+        }
     }
 }
