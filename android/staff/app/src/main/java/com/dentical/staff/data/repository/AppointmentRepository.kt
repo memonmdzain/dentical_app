@@ -5,6 +5,9 @@ import com.dentical.staff.data.local.dao.UserDao
 import com.dentical.staff.data.local.entities.AppointmentEntity
 import com.dentical.staff.data.local.entities.AppointmentStatus
 import com.dentical.staff.data.local.entities.UserEntity
+import com.dentical.staff.data.remote.SupabaseSyncHelper
+import com.dentical.staff.data.remote.toDto
+import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import java.util.Calendar
 import javax.inject.Inject
@@ -13,7 +16,8 @@ import javax.inject.Singleton
 @Singleton
 class AppointmentRepository @Inject constructor(
     private val appointmentDao: AppointmentDao,
-    private val userDao: UserDao
+    private val userDao: UserDao,
+    private val sync: SupabaseSyncHelper
 ) {
     // List view — from today onwards
     fun getAppointmentsFrom(from: Long): Flow<List<AppointmentEntity>> =
@@ -45,19 +49,24 @@ class AppointmentRepository @Inject constructor(
     suspend fun getDentistById(id: Long): UserEntity? =
         userDao.getUserById(id)
 
-    suspend fun addAppointment(appointment: AppointmentEntity): Long =
-        appointmentDao.insertAppointment(appointment)
+    suspend fun addAppointment(appointment: AppointmentEntity): Long {
+        val id = appointmentDao.insertAppointment(appointment)
+        sync.fireAndForget {
+            sync.supabase.from("appointments").upsert(appointment.copy(id = id).toDto())
+        }
+        return id
+    }
 
     suspend fun updateStatus(id: Long, status: AppointmentStatus) {
         val appt = appointmentDao.getAppointmentById(id) ?: return
-        appointmentDao.updateAppointment(
-            appt.copy(status = status, updatedAt = System.currentTimeMillis())
-        )
+        val updated = appt.copy(status = status, updatedAt = System.currentTimeMillis())
+        appointmentDao.updateAppointment(updated)
+        sync.fireAndForget { sync.supabase.from("appointments").upsert(updated.toDto()) }
     }
 
     suspend fun updateAppointment(appointment: AppointmentEntity) {
-        appointmentDao.updateAppointment(
-            appointment.copy(updatedAt = System.currentTimeMillis())
-        )
+        val updated = appointment.copy(updatedAt = System.currentTimeMillis())
+        appointmentDao.updateAppointment(updated)
+        sync.fireAndForget { sync.supabase.from("appointments").upsert(updated.toDto()) }
     }
 }

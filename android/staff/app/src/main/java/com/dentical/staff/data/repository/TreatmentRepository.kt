@@ -9,6 +9,10 @@ import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
+import com.dentical.staff.data.remote.SupabaseSyncHelper
+import com.dentical.staff.data.remote.TreatmentVisitCrossRefDto
+import com.dentical.staff.data.remote.toDto
+import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.util.Calendar
@@ -27,7 +31,8 @@ class TreatmentRepository @Inject constructor(
     private val db: DenticalDatabase,
     private val treatmentDao: TreatmentDao,
     private val visitDao: VisitDao,
-    private val crossRefDao: TreatmentVisitCrossRefDao
+    private val crossRefDao: TreatmentVisitCrossRefDao,
+    private val sync: SupabaseSyncHelper
 ) {
     fun getTreatmentsByPatient(patientId: Long): Flow<List<TreatmentEntity>> =
         treatmentDao.getTreatmentsByPatient(patientId)
@@ -101,28 +106,38 @@ class TreatmentRepository @Inject constructor(
         return maxOf(0.0, quoted + standalone - paid)
     }
 
-    suspend fun addTreatment(treatment: TreatmentEntity): Long =
-        treatmentDao.insertTreatment(treatment)
+    suspend fun addTreatment(treatment: TreatmentEntity): Long {
+        val id = treatmentDao.insertTreatment(treatment)
+        sync.fireAndForget {
+            sync.supabase.from("treatments").upsert(treatment.copy(id = id).toDto())
+        }
+        return id
+    }
 
-    suspend fun updateTreatment(treatment: TreatmentEntity) =
+    suspend fun updateTreatment(treatment: TreatmentEntity) {
         treatmentDao.updateTreatment(treatment)
+        sync.fireAndForget { sync.supabase.from("treatments").upsert(treatment.toDto()) }
+    }
 
     suspend fun updateTreatmentStatus(id: Long, status: TreatmentStatus) {
         val treatment = treatmentDao.getTreatmentById(id) ?: return
         val completedDate = if (status == TreatmentStatus.COMPLETED) System.currentTimeMillis()
                             else treatment.completedDate
-        treatmentDao.updateTreatment(
-            treatment.copy(
-                status = status,
-                completedDate = completedDate,
-                updatedAt = System.currentTimeMillis()
-            )
+        val updated = treatment.copy(
+            status = status,
+            completedDate = completedDate,
+            updatedAt = System.currentTimeMillis()
         )
+        treatmentDao.updateTreatment(updated)
+        sync.fireAndForget { sync.supabase.from("treatments").upsert(updated.toDto()) }
     }
 
     suspend fun getVisitById(visitId: Long): VisitEntity? = visitDao.getVisitById(visitId)
 
-    suspend fun updateVisit(visit: VisitEntity) = visitDao.updateVisit(visit)
+    suspend fun updateVisit(visit: VisitEntity) {
+        visitDao.updateVisit(visit)
+        sync.fireAndForget { sync.supabase.from("visits").upsert(visit.toDto()) }
+    }
 
     /**
      * FIFO allocation: amountPaid on a visit is allocated to its linked treatments in
@@ -166,12 +181,21 @@ class TreatmentRepository @Inject constructor(
     }
 
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {
-        return db.withTransaction {
-            val visitId = visitDao.insertVisit(visit)
+        val visitId = db.withTransaction {
+            val id = visitDao.insertVisit(visit)
             treatmentLinks.forEach { (treatmentId, workDone) ->
-                crossRefDao.insert(TreatmentVisitCrossRef(treatmentId, visitId, workDone))
+                crossRefDao.insert(TreatmentVisitCrossRef(treatmentId, id, workDone))
             }
-            visitId
+            id
         }
+        sync.fireAndForget { sync.supabase.from("visits").upsert(visit.copy(id = visitId).toDto()) }
+        treatmentLinks.forEach { (treatmentId, workDone) ->
+            sync.fireAndForget {
+                sync.supabase.from("treatment_visit_cross_ref").upsert(
+                    TreatmentVisitCrossRefDto(treatmentId, visitId, workDone)
+                )
+            }
+        }
+        return visitId
     }
 }

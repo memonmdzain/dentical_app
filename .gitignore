@@ -1,0 +1,20 @@
+# Secrets — never commit
+local.properties
+*.jks
+*.keystore
+*.p12
+
+# Android build output
+**/build/
+**/.gradle/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# APKs / AABs
+*.apk
+*.aab
