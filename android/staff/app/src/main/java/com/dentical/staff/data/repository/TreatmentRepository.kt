@@ -216,9 +216,9 @@ class TreatmentRepository @Inject constructor(
             }
             id
         }
-        sync.fireAndForget { sync.supabase.from("visits").upsert(visit.copy(id = visitId).toDto()) }
-        treatmentLinks.forEach { (treatmentId, workDone) ->
-            sync.fireAndForget {
+        sync.fireAndForget {
+            sync.supabase.from("visits").upsert(visit.copy(id = visitId).toDto())
+            treatmentLinks.forEach { (treatmentId, workDone) ->
                 sync.supabase.from("treatment_visit_cross_ref").upsert(
                     TreatmentVisitCrossRefDto(treatmentId, visitId, workDone)
                 )
