@@ -44,6 +44,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Verify Supabase secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          MISSING=0
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "ERROR: SUPABASE_URL secret is not set or empty"
+            MISSING=1
+          else
+            echo "SUPABASE_URL is set (${#SUPABASE_URL} chars)"
+          fi
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "ERROR: SUPABASE_ANON_KEY secret is not set or empty"
+            MISSING=1
+          else
+            echo "SUPABASE_ANON_KEY is set (${#SUPABASE_ANON_KEY} chars)"
+          fi
+          if [ $MISSING -eq 1 ]; then
+            echo "Go to: GitHub repo → Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+
       - name: Build Debug APK
         working-directory: android/staff
         env:

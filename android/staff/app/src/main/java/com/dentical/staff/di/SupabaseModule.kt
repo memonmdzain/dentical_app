@@ -1,5 +1,6 @@
 package com.dentical.staff.di
 
+import android.util.Log
 import com.dentical.staff.BuildConfig
 import dagger.Module
 import dagger.Provides
@@ -24,11 +25,15 @@ object SupabaseModule {
 
     @Provides
     @Singleton
-    fun provideSupabaseClient(): SupabaseClient = createSupabaseClient(
-        supabaseUrl = BuildConfig.SUPABASE_URL.ifBlank { "https://placeholder.supabase.co" },
-        supabaseKey = BuildConfig.SUPABASE_ANON_KEY.ifBlank { "placeholder" }
-    ) {
-        install(Postgrest)
+    fun provideSupabaseClient(): SupabaseClient {
+        val url = BuildConfig.SUPABASE_URL
+        val key = BuildConfig.SUPABASE_ANON_KEY
+        if (url.isBlank()) Log.e("SupabaseModule", "SUPABASE_URL is empty — cloud sync disabled. Check GitHub secrets.")
+        if (key.isBlank()) Log.e("SupabaseModule", "SUPABASE_ANON_KEY is empty — cloud sync disabled. Check GitHub secrets.")
+        return createSupabaseClient(
+            supabaseUrl = url.ifBlank { "https://placeholder.supabase.co" },
+            supabaseKey = key.ifBlank { "placeholder" }
+        ) { install(Postgrest) }
     }
 
     @ApplicationScope
