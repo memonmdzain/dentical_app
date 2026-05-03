@@ -48,6 +48,9 @@ interface PatientDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPatient(patient: PatientEntity): Long
 
+    @Upsert
+    suspend fun upsertAll(patients: List<PatientEntity>)
+
     @Update
     suspend fun updatePatient(patient: PatientEntity)
 
@@ -77,6 +80,9 @@ interface AppointmentDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAppointment(appointment: AppointmentEntity): Long
+
+    @Upsert
+    suspend fun upsertAll(appointments: List<AppointmentEntity>)
 
     @Update
     suspend fun updateAppointment(appointment: AppointmentEntity)
@@ -113,6 +119,9 @@ interface TreatmentDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertTreatment(treatment: TreatmentEntity): Long
+
+    @Upsert
+    suspend fun upsertAll(treatments: List<TreatmentEntity>)
 
     @Update
     suspend fun updateTreatment(treatment: TreatmentEntity)
@@ -177,6 +186,9 @@ interface VisitDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertVisit(visit: VisitEntity): Long
 
+    @Upsert
+    suspend fun upsertAll(visits: List<VisitEntity>)
+
     @Update
     suspend fun updateVisit(visit: VisitEntity)
 
@@ -188,6 +200,9 @@ interface VisitDao {
 interface TreatmentVisitCrossRefDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(crossRef: TreatmentVisitCrossRef)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(crossRefs: List<TreatmentVisitCrossRef>)
 
     @Delete
     suspend fun delete(crossRef: TreatmentVisitCrossRef)

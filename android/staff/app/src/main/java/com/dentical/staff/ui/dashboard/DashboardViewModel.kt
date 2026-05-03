@@ -2,6 +2,7 @@ package com.dentical.staff.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dentical.staff.data.remote.SyncManager
 import com.dentical.staff.data.repository.TreatmentRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -16,8 +17,13 @@ data class DashboardUiState(
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val treatmentRepository: TreatmentRepository
+    private val treatmentRepository: TreatmentRepository,
+    private val syncManager: SyncManager
 ) : ViewModel() {
+
+    val isSyncing: StateFlow<Boolean> = syncManager.isSyncing
+    val canSync: StateFlow<Boolean> = syncManager.canSync
+    fun onSyncClick() = syncManager.syncAll()
 
     val uiState: StateFlow<DashboardUiState> = combine(
         treatmentRepository.getOngoingTreatmentCount(),

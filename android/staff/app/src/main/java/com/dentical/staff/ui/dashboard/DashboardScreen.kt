@@ -21,11 +21,26 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val canSync by viewModel.canSync.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("🦷 Dentical Staff") },
+                actions = {
+                    IconButton(onClick = viewModel::onSyncClick, enabled = canSync) {
+                        if (isSyncing)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        else
+                            Icon(Icons.Default.Sync, "Sync",
+                                tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary

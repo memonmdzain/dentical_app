@@ -38,6 +38,8 @@ fun PatientDetailScreen(
     viewModel: PatientDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val canSync by viewModel.canSync.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(patientId) { viewModel.loadPatient(patientId) }
@@ -55,6 +57,17 @@ fun PatientDetailScreen(
                     IconButton(onClick = { /* TODO: edit */ }) {
                         Icon(Icons.Default.Edit, "Edit",
                             tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                    IconButton(onClick = viewModel::onSyncClick, enabled = canSync) {
+                        if (isSyncing)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        else
+                            Icon(Icons.Default.Sync, "Sync",
+                                tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

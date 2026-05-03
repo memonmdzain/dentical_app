@@ -7,6 +7,7 @@ import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
+import com.dentical.staff.data.remote.SyncManager
 import com.dentical.staff.data.repository.PatientFinancialSummary
 import com.dentical.staff.data.repository.PatientRepository
 import com.dentical.staff.data.repository.TreatmentRepository
@@ -35,8 +36,13 @@ data class PatientDetailUiState(
 @HiltViewModel
 class PatientDetailViewModel @Inject constructor(
     private val patientRepository: PatientRepository,
-    private val treatmentRepository: TreatmentRepository
+    private val treatmentRepository: TreatmentRepository,
+    private val syncManager: SyncManager
 ) : ViewModel() {
+
+    val isSyncing: StateFlow<Boolean> = syncManager.isSyncing
+    val canSync: StateFlow<Boolean> = syncManager.canSync
+    fun onSyncClick() = syncManager.syncAll()
 
     private val _uiState = MutableStateFlow(PatientDetailUiState())
     val uiState: StateFlow<PatientDetailUiState> = _uiState.asStateFlow()
@@ -50,6 +56,8 @@ class PatientDetailViewModel @Inject constructor(
     fun loadPatient(id: Long) {
         if (loadedPatientId == id) return
         loadedPatientId = id
+
+        viewModelScope.launch { treatmentRepository.pullForPatient(id) }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
