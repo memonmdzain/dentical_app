@@ -184,6 +184,18 @@ class TreatmentRepository @Inject constructor(
         return (totalQuoted - originalCost + partialCharge + standaloneCharged) - totalPaid
     }
 
+    suspend fun pullAll() {
+        if (!sync.isConnected) return
+        try {
+            val treatmentDtos = sync.supabase.from("treatments").select().decodeList<TreatmentDto>()
+            treatmentDao.upsertAll(treatmentDtos.map { it.toEntity() })
+            val visitDtos = sync.supabase.from("visits").select().decodeList<VisitDto>()
+            visitDao.upsertAll(visitDtos.map { it.toEntity() })
+        } catch (e: Exception) {
+            Log.e("SupabaseSync", "Pull all treatments/visits failed", e)
+        }
+    }
+
     suspend fun pullForPatient(patientId: Long) {
         if (!sync.isConnected) return
         try {
