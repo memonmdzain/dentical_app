@@ -12,9 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import com.dentical.staff.ui.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,20 +21,26 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val canSync by viewModel.canSync.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("🦷 Dentical Staff") },
+                actions = {
+                    IconButton(onClick = viewModel::onSyncClick, enabled = canSync) {
+                        if (isSyncing)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        else
+                            Icon(Icons.Default.Sync, "Sync",
+                                tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary

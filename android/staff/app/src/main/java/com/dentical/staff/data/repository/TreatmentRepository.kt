@@ -191,8 +191,11 @@ class TreatmentRepository @Inject constructor(
             treatmentDao.upsertAll(treatmentDtos.map { it.toEntity() })
             val visitDtos = sync.supabase.from("visits").select().decodeList<VisitDto>()
             visitDao.upsertAll(visitDtos.map { it.toEntity() })
+            val crossRefDtos = sync.supabase.from("treatment_visit_cross_ref")
+                .select().decodeList<TreatmentVisitCrossRefDto>()
+            crossRefDao.upsertAll(crossRefDtos.map { it.toEntity() })
         } catch (e: Exception) {
-            Log.e("SupabaseSync", "Pull all treatments/visits failed", e)
+            Log.e("SupabaseSync", "Pull all failed", e)
         }
     }
 

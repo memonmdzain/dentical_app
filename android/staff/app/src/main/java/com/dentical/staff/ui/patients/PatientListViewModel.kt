@@ -3,12 +3,12 @@ package com.dentical.staff.ui.patients
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.PatientEntity
+import com.dentical.staff.data.remote.SyncManager
 import com.dentical.staff.data.repository.PatientRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class PatientListUiState(
@@ -20,12 +20,13 @@ data class PatientListUiState(
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PatientListViewModel @Inject constructor(
-    private val repository: PatientRepository
+    private val repository: PatientRepository,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
-    init {
-        viewModelScope.launch { repository.pullFromSupabase() }
-    }
+    val isSyncing: StateFlow<Boolean> = syncManager.isSyncing
+    val canSync: StateFlow<Boolean> = syncManager.canSync
+    fun onSyncClick() = syncManager.syncAll()
 
     private val _searchQuery = MutableStateFlow("")
     private val _isLoading = MutableStateFlow(true)

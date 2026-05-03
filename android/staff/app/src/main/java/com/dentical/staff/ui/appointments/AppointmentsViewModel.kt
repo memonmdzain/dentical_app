@@ -3,6 +3,7 @@ package com.dentical.staff.ui.appointments
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.*
+import com.dentical.staff.data.remote.SyncManager
 import com.dentical.staff.data.repository.AppointmentRepository
 import com.dentical.staff.data.repository.PatientRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,12 +41,13 @@ fun todayStartMillis(): Long {
 @HiltViewModel
 class AppointmentsViewModel @Inject constructor(
     private val appointmentRepository: AppointmentRepository,
-    private val patientRepository: PatientRepository
+    private val patientRepository: PatientRepository,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
-    init {
-        viewModelScope.launch { appointmentRepository.pullFromSupabase() }
-    }
+    val isSyncing: StateFlow<Boolean> = syncManager.isSyncing
+    val canSync: StateFlow<Boolean> = syncManager.canSync
+    fun onSyncClick() = syncManager.syncAll()
 
     private val _viewMode = MutableStateFlow(AppointmentViewMode.LIST)
     private val _calendarViewType = MutableStateFlow(CalendarViewType.DAY)

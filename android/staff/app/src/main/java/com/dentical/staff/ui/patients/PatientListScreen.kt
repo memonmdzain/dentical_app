@@ -25,6 +25,8 @@ fun PatientListScreen(
     viewModel: PatientListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+    val canSync by viewModel.canSync.collectAsState()
 
     Scaffold(
         topBar = {
@@ -33,6 +35,19 @@ fun PatientListScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = viewModel::onSyncClick, enabled = canSync) {
+                        if (isSyncing)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        else
+                            Icon(Icons.Default.Sync, "Sync",
+                                tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
