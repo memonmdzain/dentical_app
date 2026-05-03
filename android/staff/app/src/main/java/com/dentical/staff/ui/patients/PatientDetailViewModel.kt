@@ -59,14 +59,13 @@ class PatientDetailViewModel @Inject constructor(
 
         viewModelScope.launch { treatmentRepository.pullForPatient(id) }
 
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler) {
             _uiState.update { it.copy(isLoading = true) }
-            try {
-                val patient = patientRepository.getPatientById(id)
-                _uiState.update { it.copy(patient = patient, isLoading = false) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false) }
-            }
+            patientRepository.getPatientByIdFlow(id)
+                .catch { e -> _uiState.update { it.copy(isLoading = false, error = "patient: ${e.javaClass.simpleName}: ${e.message}") } }
+                .collect { patient ->
+                    _uiState.update { it.copy(patient = patient, isLoading = false) }
+                }
         }
 
         viewModelScope.launch(errorHandler) {

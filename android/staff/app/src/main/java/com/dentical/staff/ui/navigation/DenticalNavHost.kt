@@ -22,6 +22,9 @@ sealed class Screen(val route: String) {
     object PatientDetail : Screen("patients/{patientId}") {
         fun createRoute(id: Long) = "patients/$id"
     }
+    object EditPatient : Screen("patients/{patientId}/edit") {
+        fun createRoute(id: Long) = "patients/$id/edit"
+    }
     object Appointments : Screen("appointments")
     object AddAppointment : Screen("appointments/new?patientId={patientId}") {
         fun createRoute(patientId: Long? = null) =
@@ -91,6 +94,17 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             )
         }
         composable(
+            route = Screen.EditPatient.route,
+            arguments = listOf(navArgument("patientId") { type = NavType.LongType })
+        ) {
+            val patientId = it.arguments?.getLong("patientId") ?: return@composable
+            EditPatientScreen(
+                patientId = patientId,
+                onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
             route = Screen.PatientDetail.route,
             arguments = listOf(navArgument("patientId") { type = NavType.LongType })
         ) {
@@ -98,8 +112,12 @@ fun DenticalNavHost(navController: NavHostController = rememberNavController()) 
             PatientDetailScreen(
                 patientId = patientId,
                 onBack = { navController.popBackStack() },
+                onEditPatient = { navController.navigate(Screen.EditPatient.createRoute(patientId)) },
                 onAddTreatment = { navController.navigate(Screen.AddTreatment.createRoute(patientId)) },
                 onAddVisit = { navController.navigate(Screen.AddVisit.createRoute(patientId)) },
+                onEditVisit = { visitId ->
+                    navController.navigate(Screen.EditVisit.createRoute(patientId, visitId))
+                },
                 onTreatmentClick = { treatmentId ->
                     navController.navigate(Screen.TreatmentDetail.createRoute(patientId, treatmentId))
                 }

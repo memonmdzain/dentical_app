@@ -21,6 +21,7 @@ import javax.inject.Inject
 data class EditVisitUiState(
     val patientId: Long = 0,
     val originalCreatedAt: Long = 0,
+    val originalAmountPaid: Double = 0.0,
     val visitDateMillis: Long = System.currentTimeMillis(),
     val selectedDentistId: Long? = null,
     val performedByOriginal: String = "",
@@ -72,6 +73,7 @@ class EditVisitViewModel @Inject constructor(
                     it.copy(
                         patientId = visit.patientId,
                         originalCreatedAt = visit.createdAt,
+                        originalAmountPaid = visit.amountPaid,
                         visitDateMillis = visit.visitDate,
                         selectedDentistId = dentistId,
                         performedByOriginal = visit.performedBy,
@@ -118,6 +120,26 @@ class EditVisitViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                val amountPaidVal = state.amountPaid.toDoubleOrNull() ?: 0.0
+                if (amountPaidVal > 0.0) {
+                    val maxAllowed = if (state.isStandalone) {
+                        state.costCharged.toDoubleOrNull() ?: 0.0
+                    } else {
+                        state.linkedTreatments.sumOf {
+                            treatmentRepository.calculateTreatmentOutstanding(it.id)
+                        } + state.originalAmountPaid
+                    }
+                    if (amountPaidVal > maxAllowed + 0.01) {
+                        _uiState.update {
+                            it.copy(
+                                isSaving = false,
+                                error = "Amount paid ₹${amountPaidVal.toLong()} exceeds outstanding ₹${maxAllowed.toLong()}. Reduce payment or update the treatment cost first."
+                            )
+                        }
+                        return@launch
+                    }
+                }
+
                 val visit = VisitEntity(
                     id = visitId,
                     patientId = state.patientId,

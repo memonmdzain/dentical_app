@@ -24,6 +24,8 @@ class PatientRepository @Inject constructor(
 
     suspend fun getPatientById(id: Long): PatientEntity? = patientDao.getPatientById(id)
 
+    fun getPatientByIdFlow(id: Long): Flow<PatientEntity?> = patientDao.getPatientByIdFlow(id)
+
     suspend fun addPatient(patient: PatientEntity): Long {
         val maxCode = patientDao.getMaxPatientCode() ?: 10000
         val nextCode = maxCode + 1
