@@ -30,15 +30,6 @@ Each module is independently versioned and deployed.
 | `backend/feature/*` | Backend features (later) |
 | `website/feature/*` | Website features (later) |
 
-## Version Tagging Convention
-
-```
-android-staff/v0.1.0-dev
-android-patient/v0.1.0-dev
-backend/v0.1.0-dev
-website/v0.1.0-dev
-```
-
 ## Deployment Flow
 
 ```
@@ -49,28 +40,38 @@ android/feature/xxx
        main   ←── Auto builds release APK + tags version
 ```
 
-## Data Loading Strategy
+## Tech Stack — Staff App
 
-| Phase | Approach |
-|-------|----------|
-| Phase 1 (local) | Room + Kotlin Flow — reactive streams, emit on DB write only. ViewModels cache latest value in StateFlow. UI uses LazyColumn for on-demand rendering. |
-| Phase 2 (backend) | Repository-layer in-memory cache with 5-minute TTL. Cache hit → return cached data. Stale → network fetch → write Room → Flow emits update. Room DB remains the offline/persistent cache. |
+| Layer | Choice |
+|-------|--------|
+| Language | Kotlin |
+| UI | Jetpack Compose |
+| Architecture | MVVM + Hilt + Room |
+| Cloud DB | Supabase (PostgreSQL) |
+| Sync | Offline-first — Room primary, Supabase cloud backup |
+| Auth | Local username/password (Google OAuth planned) |
+
+## Data Sync Strategy
+
+The staff app is **offline-first**: Room is the primary data store and all UI reads from Room reactive Flows.
+
+- **Writes** sync to Supabase immediately in the background (fire-and-forget)
+- **Reads** sync from Supabase automatically every time the app opens, and on demand via the sync button available on every screen
+- Multi-device: data is shared across devices through Supabase; any device can press the sync button to pull latest
 
 ## Apps
 
 ### Staff & Admin App (`android/staff/`)
 Internal app for clinic staff. Distributed as private APK.
-- Dashboard: ongoing treatments count, today's collections, total outstanding — each stat tappable to a drill-down patient list with Schedule / Call / WhatsApp actions
-- Appointment management (list, calendar day/week/month, add, edit, detail)
-- Patient records with financial summary (Total Billed / Paid / Outstanding)
-- Treatments: add, edit, ongoing/past sections, standalone visits section
-- Visits: add (Cash/GPay/Bank Transfer), edit; overpayment blocked at entry
-- Treatment detail: full visit history, per-visit edit
-- Cancel treatment: partial charge dialog, live patient balance preview, refund confirmation; refund auto-recorded as negative payment
-- Mark Complete: confirmation dialog + payment gate (FIFO allocation across linked treatments)
-- Reopen treatment: prompts to confirm and update quoted cost
-- Billing & payments (planned)
-- Push reminders (planned)
+- **Dashboard**: ongoing treatments count, today's collections, total outstanding — each stat tappable to a drill-down patient list with Schedule / Call / WhatsApp actions
+- **Appointments**: list view, calendar (day/week/month), add, edit, detail with status management
+- **Patients**: records with financial summary (Total Billed / Paid / Outstanding)
+- **Treatments**: add, edit, ongoing/past sections, standalone visits section, FIFO payment allocation
+- **Visits**: add (Cash/GPay/Bank Transfer), edit; overpayment blocked at entry
+- **Treatment detail**: full visit history, per-visit edit, mark complete (payment gate), cancel (partial charge + refund), reopen
+- **Cloud sync**: auto-sync on every app open; manual sync button (with 30-sec cooldown) on every screen
+- Billing & payments — planned
+- Push reminders — planned
 
 ### Patient App (`android/patient/`) — Planned
 Public app for patients. Distributed via Play Store.
@@ -78,6 +79,14 @@ Public app for patients. Distributed via Play Store.
 - View own records
 - Payments
 - Notifications
+
+## Supabase Setup
+
+Schema SQL (tables, RLS, indexes): `android/staff/supabase_schema.sql`
+
+Required secrets:
+- `local.properties` (gitignored, never committed): `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+- GitHub Actions: add both as separate repository secrets named `SUPABASE_URL` and `SUPABASE_ANON_KEY`
 
 ---
 

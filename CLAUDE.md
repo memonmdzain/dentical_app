@@ -51,11 +51,18 @@ android/staff/app/src/main/java/com/dentical/staff/
 │   │   │   └── TreatmentAndInvoiceEntities.kt
 │   │   ├── Converters.kt
 │   │   └── DenticalDatabase.kt     (version 6, exportSchema=false)
+│   ├── remote/
+│   │   ├── RemoteDtos.kt           (7 @Serializable DTOs with @SerialName snake_case)
+│   │   ├── RemoteMappers.kt        (Entity↔DTO extension functions)
+│   │   ├── SupabaseSyncHelper.kt   (fireAndForget write-sync, delete)
+│   │   └── SyncManager.kt          (@Singleton — orchestrates full pull; auto on app open + sync button)
 │   └── repository/
-│       ├── PatientRepository.kt
-│       ├── AppointmentRepository.kt
-│       └── TreatmentRepository.kt
-├── di/DatabaseModule.kt
+│       ├── PatientRepository.kt    (pullFromSupabase)
+│       ├── AppointmentRepository.kt (pullFromSupabase)
+│       └── TreatmentRepository.kt  (pullAll, pullForPatient)
+├── di/
+│   ├── DatabaseModule.kt
+│   └── SupabaseModule.kt           (SupabaseClient + ApplicationScope)
 ├── ui/
 │   ├── theme/
 │   ├── navigation/DenticalNavHost.kt
@@ -71,6 +78,7 @@ android/staff/app/src/main/java/com/dentical/staff/
 │   ├── reminders/                   ⏳ Planned
 │   └── settings/                    ⏳ Planned
 └── util/
+    ├── NetworkMonitor.kt            (ConnectivityManager wrapper)
     ├── PasswordUtil.kt
     └── PhoneUtil.kt
 ```
@@ -81,14 +89,14 @@ android/staff/app/src/main/java/com/dentical/staff/
 
 | Branch | Purpose |
 |--------|---------|
-| `master` | Production only. Never commit directly. |
+| `main` | Production only. Never commit directly. |
 | `develop` | Integration branch. Merge here after each working feature. |
 | `android/feature/*` | One branch per feature |
 | `android/fix/*` | Bug fixes |
 
 ### Flow
 ```
-android/feature/xxx → develop (PR) → master (PR + release tag)
+android/feature/xxx → develop (PR) → main (PR + release tag)
 ```
 
 ### IMPORTANT — Code Access Between Sessions
@@ -97,7 +105,7 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`android/feature/dashboard` — pushed, ready to merge into `develop`
+`android/feature/supabase-integration` — ready to merge into `develop`
 
 ---
 
@@ -107,7 +115,8 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 - Android debug APK on every push to develop
 - APK artifact downloadable for 7 days
 - Public repo = unlimited free minutes
-- Uninstall old APK before installing new one
+- Requires two GitHub repository secrets: `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+- Workflow validates secrets before building (fails fast if missing)
 
 ---
 
@@ -118,12 +127,24 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 | Language | Kotlin |
 | UI | Jetpack Compose |
 | Architecture | MVVM |
-| Local DB | Room v3 |
+| Local DB | Room v3 (v2.6.1) |
 | DI | Hilt |
 | Navigation | Jetpack Navigation Compose |
+| Cloud DB | Supabase (PostgreSQL) via supabase-kt v3.1.4 + postgrest-kt |
+| HTTP | Ktor Android engine v3.1.3 |
+| Serialization | kotlinx.serialization |
 | Auth MVP | Local username/password + roles |
-| Auth Phase 2 | Google OAuth |
-| Backend Phase 2 | PostgreSQL |
+| Auth Phase 2 | Google OAuth via Supabase Auth |
+
+---
+
+## Supabase Setup
+
+- Schema SQL: `android/staff/supabase_schema.sql` (tables + RLS + notes)
+- `dentist_id` FK removed from appointments and treatments — dentists are seeded locally in Room only
+- RLS enabled on all tables; transitional `anon_all` policy until Google OAuth is added
+- `local.properties` (gitignored): `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+- GitHub Actions: add both as separate repository secrets
 
 ---
 
@@ -161,20 +182,18 @@ android/feature/xxx → develop (PR) → master (PR + release tag)
 
 ---
 
-## Data Loading Strategy
+## Sync Architecture
 
-### Phase 1 — Local (current)
-- Room + Kotlin Flow: reactive streams, emit only on DB writes → already "live cache"
-- ViewModels collect flows into StateFlow — data retained across recompositions
-- UI screens lazy-load via LazyColumn; data fetched only for the active screen
-- No explicit TTL needed: Room invalidates its query cache on writes, not time
+**Offline-first.** Room is the primary store. UI always reads from Room reactive Flows.
 
-### Phase 2 — Backend
-- Repository layer will add an in-memory cache (Map + timestamp) per entity type
-- TTL default: 5 minutes. Stale check: `System.currentTimeMillis() - cachedAt > ttlMs`
-- Cache hit → return cached Flow. Cache miss / stale → network fetch → write to Room → Room flow emits
-- Room DB continues to serve as the persistent offline cache between sessions
-- `CacheManager` singleton (Hilt @Singleton) will hold the TTL map, injected into repositories
+### Write sync
+Every Room mutation fires a background `upsert`/`delete` to Supabase via `SupabaseSyncHelper.fireAndForget`. Failures are logged, never block the user.
+
+### Read sync — `SyncManager` (@Singleton)
+- **Auto on app open**: observes `ProcessLifecycleOwner` ON_START — fires a full pull every time the app comes to the foreground
+- **Manual sync button**: `Icons.Default.Sync` in every screen's TopAppBar; calls `syncManager.syncAll()` with a 30-second cooldown; shows spinner while syncing, greyed-out during cooldown
+- **Full pull order** (FK-safe): patients → appointments → treatments → visits → treatment_visit_cross_ref
+- **Per-patient pull**: `TreatmentRepository.pullForPatient(id)` fires the first time a `PatientDetailScreen` opens for a given patient
 
 ---
 
@@ -218,6 +237,8 @@ Login ✅
     └── Settings ⏳ (Admin only)
 ```
 
+All screens have a Sync button (TopAppBar) tied to the shared `SyncManager`.
+
 ---
 
 ## Patient Spec ✅
@@ -251,13 +272,13 @@ Login ✅
 - [x] Appointments (list, calendar, add, edit, detail)
 - [x] Treatments + Visits (add, detail, status, payment mode, financial summary)
 - [x] Dashboard stats (ongoing count, today's collections, total outstanding, drill-down patient lists)
+- [x] Supabase cloud sync (offline-first, write on mutation, full read sync on app open + sync button)
 - [ ] Billing & invoices
 - [ ] Push reminders
 - [ ] Settings — staff management
 
-### Phase 2 — Cloud
-- [ ] PostgreSQL backend
-- [ ] Google OAuth
+### Phase 2 — Auth & Notifications
+- [ ] Google OAuth via Supabase Auth (replaces anon RLS policies with per-user policies)
 - [ ] FCM push notifications
 
 ### Phase 3 — Patient App
@@ -282,7 +303,6 @@ Login ✅
 | Edit disabled on closed status | Yes |
 | Treatment sections: Ongoing / Past | Yes |
 | fallbackToDestructiveMigration (dev) | Yes — remove before Play Store launch |
-| Phase 2 TTL cache default | 5 minutes, in-memory, per repository |
 | Edit visits | Yes — date, dentist, amount, payment mode, notes |
 | Edit treatments | Yes — all fields editable |
 | Reopen treatment | Yes — works for both Completed and Cancelled |
@@ -305,6 +325,15 @@ Login ✅
 | Dashboard outstanding patients list | Patients where per-patient outstanding > ₹0; reactive to patient add/remove |
 | Dashboard patient card | Icon-only action row (Schedule, Call, WhatsApp); tap card → Patient Detail |
 | AddAppointment patientId pre-fill | Optional `?patientId=` nav arg; pre-selects patient when navigated from dashboard |
+| Cloud sync strategy | Offline-first; Room is primary; Supabase is cloud backup |
+| Write sync | fireAndForget on every Room mutation; failures logged silently |
+| Read sync trigger | Auto: ProcessLifecycleOwner ON_START (every app foreground); Manual: sync button per screen |
+| Sync button cooldown | 30 seconds after last sync; shared across all screens via SyncManager singleton |
+| Full sync pull order | patients → appointments → treatments → visits → cross_refs (FK-safe) |
+| dentist_id FK in Supabase | Removed — dentists seeded locally only, FK would break every write |
+| Supabase RLS | Enabled; transitional anon_all policies until Google OAuth replaces them |
+| Cross-ref sync fix | Visit and cross_refs sequenced in one fireAndForget block (prevents FK race condition) |
+| Supabase secrets | local.properties (gitignored) locally; two separate GitHub repo secrets for CI |
 
 ---
 
@@ -313,19 +342,14 @@ Login ✅
 ```bash
 cd ~/storage/dentical_app
 
-# Unzip Claude output
-unzip ~/storage/downloads/filename.zip -d ~/scaffold_temp
-cp -r ~/scaffold_temp/dentical_app/* ~/storage/dentical_app/
-rm -rf ~/scaffold_temp
-
 # Commit & push
 git add .
 git commit -m "feat: description"
-git push origin android/feature/scaffold
+git push origin android/feature/xxx
 
 # Merge to develop (after testing)
 git checkout develop
-git merge android/feature/scaffold
+git merge android/feature/xxx
 git push origin develop
 ```
 
@@ -337,8 +361,7 @@ git push origin develop
 - State the feature and decisions upfront — no need to re-discuss
 - One session = one feature
 - For bug fixes just paste the error — say "fix it"
-- str_replace edits are cheaper than full file rewrites
 
 ---
 
-> Last updated: April 2026 — android/feature/dashboard: Dashboard stats screen (ongoing treatments count, today's collections, total outstanding); drill-down patient lists with icon-only action cards (Schedule, Call, WhatsApp) and tap-to-patient-detail; AddAppointment supports optional patientId pre-fill nav arg
+> Last updated: May 2026 — android/feature/supabase-integration: Supabase cloud sync (offline-first, write-on-mutation, full read sync on every app open via ProcessLifecycleOwner + manual sync button with 30-sec cooldown on every screen)
