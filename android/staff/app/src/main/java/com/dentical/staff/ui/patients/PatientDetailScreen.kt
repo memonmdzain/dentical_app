@@ -32,8 +32,10 @@ import java.util.*
 fun PatientDetailScreen(
     patientId: Long,
     onBack: () -> Unit,
+    onEditPatient: () -> Unit,
     onAddTreatment: () -> Unit,
     onAddVisit: () -> Unit,
+    onEditVisit: (Long) -> Unit,
     onTreatmentClick: (Long) -> Unit,
     viewModel: PatientDetailViewModel = hiltViewModel()
 ) {
@@ -54,7 +56,7 @@ fun PatientDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: edit */ }) {
+                    IconButton(onClick = onEditPatient) {
                         Icon(Icons.Default.Edit, "Edit",
                             tint = MaterialTheme.colorScheme.onPrimary)
                     }
@@ -233,6 +235,7 @@ fun PatientDetailScreen(
                         financialSummary = uiState.financialSummary,
                         onAddTreatment = onAddTreatment,
                         onAddVisit = onAddVisit,
+                        onEditVisit = onEditVisit,
                         onTreatmentClick = onTreatmentClick
                     )
                     2 -> InvoicesTab()
@@ -251,6 +254,7 @@ fun TreatmentsTab(
     financialSummary: PatientFinancialSummary,
     onAddTreatment: () -> Unit,
     onAddVisit: () -> Unit,
+    onEditVisit: (Long) -> Unit,
     onTreatmentClick: (Long) -> Unit
 ) {
     val context = LocalContext.current
@@ -321,7 +325,11 @@ fun TreatmentsTab(
         if (standaloneVisits.isNotEmpty()) {
             item { SectionHeader("Standalone Visits (${standaloneVisits.size})", modifier = Modifier.padding(top = 4.dp)) }
             items(standaloneVisits, key = { "sv${it.id}" }) { visit ->
-                StandaloneVisitCard(visit = visit, dateFormatter = dateFormatter)
+                StandaloneVisitCard(
+                    visit = visit,
+                    dateFormatter = dateFormatter,
+                    onEdit = { onEditVisit(visit.id) }
+                )
             }
         }
 
@@ -352,7 +360,11 @@ private fun SectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StandaloneVisitCard(visit: VisitEntity, dateFormatter: SimpleDateFormat) {
+private fun StandaloneVisitCard(
+    visit: VisitEntity,
+    dateFormatter: SimpleDateFormat,
+    onEdit: () -> Unit
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -368,17 +380,30 @@ private fun StandaloneVisitCard(visit: VisitEntity, dateFormatter: SimpleDateFor
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                if (visit.amountPaid > 0) {
-                    Surface(shape = MaterialTheme.shapes.small, color = Color(0xFFE8F5E9)) {
-                        Text(
-                            buildString {
-                                append("Paid ${formatCurrency(visit.amountPaid)}")
-                                visit.paymentMode?.let { append(" · ${it.displayName}") }
-                            },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32),
-                            fontWeight = FontWeight.Medium
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (visit.amountPaid > 0) {
+                        Surface(shape = MaterialTheme.shapes.small, color = Color(0xFFE8F5E9)) {
+                            Text(
+                                buildString {
+                                    append("Paid ${formatCurrency(visit.amountPaid)}")
+                                    visit.paymentMode?.let { append(" · ${it.displayName}") }
+                                },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF2E7D32),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit visit",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

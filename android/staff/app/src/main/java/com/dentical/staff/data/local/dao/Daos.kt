@@ -39,6 +39,9 @@ interface PatientDao {
     @Query("SELECT * FROM patients WHERE id = :id")
     suspend fun getPatientById(id: Long): PatientEntity?
 
+    @Query("SELECT * FROM patients WHERE id = :id")
+    fun getPatientByIdFlow(id: Long): Flow<PatientEntity?>
+
     @Query("SELECT * FROM patients WHERE fullName LIKE '%' || :query || '%' OR phone LIKE '%' || :query || '%' OR patientCode LIKE '%' || :query || '%'")
     fun searchPatients(query: String): Flow<List<PatientEntity>>
 
