@@ -39,8 +39,10 @@ fun UserListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddUser, containerColor = DenticalBlue) {
-                Icon(Icons.Default.Add, contentDescription = "Add User", tint = MaterialTheme.colorScheme.onPrimary)
+            if (state.canCreate) {
+                FloatingActionButton(onClick = onAddUser, containerColor = DenticalBlue) {
+                    Icon(Icons.Default.Add, contentDescription = "Add User", tint = MaterialTheme.colorScheme.onPrimary)
+                }
             }
         }
     ) { padding ->
@@ -70,6 +72,8 @@ fun UserListScreen(
                     items(state.users, key = { it.user.id }) { userWithRoles ->
                         UserCard(
                             userWithRoles  = userWithRoles,
+                            canUpdate      = state.canUpdate,
+                            canDelete      = state.canDelete,
                             onEdit         = { onEditUser(userWithRoles.user.id) },
                             onToggleActive = { confirmDeactivateUser = userWithRoles }
                         )
@@ -107,6 +111,8 @@ fun UserListScreen(
 @Composable
 private fun UserCard(
     userWithRoles: UserWithRoles,
+    canUpdate: Boolean,
+    canDelete: Boolean,
     onEdit: () -> Unit,
     onToggleActive: () -> Unit
 ) {
@@ -138,15 +144,19 @@ private fun UserCard(
                     }
                 }
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = DenticalBlue)
+            if (canUpdate) {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = DenticalBlue)
+                }
             }
-            IconButton(onClick = onToggleActive) {
-                Icon(
-                    if (userWithRoles.user.isActive) Icons.Default.PersonOff else Icons.Default.PersonAdd,
-                    contentDescription = if (userWithRoles.user.isActive) "Deactivate" else "Activate",
-                    tint = if (userWithRoles.user.isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                )
+            if (canDelete) {
+                IconButton(onClick = onToggleActive) {
+                    Icon(
+                        if (userWithRoles.user.isActive) Icons.Default.PersonOff else Icons.Default.PersonAdd,
+                        contentDescription = if (userWithRoles.user.isActive) "Deactivate" else "Activate",
+                        tint = if (userWithRoles.user.isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }

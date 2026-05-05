@@ -1,9 +1,10 @@
 package com.dentical.staff.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -88,24 +89,28 @@ sealed class Screen(val route: String) {
     object EditRole : Screen("settings/roles/{roleId}/edit") {
         fun createRoute(roleId: Long) = "settings/roles/$roleId/edit"
     }
+
+    object Splash : Screen("splash")
 }
 
 @Composable
 fun DenticalNavHost(
-    navController: NavHostController = rememberNavController(),
-    sessionManager: SessionManager = hiltViewModel<NavSessionViewModel>().sessionManager
+    navController: NavHostController = rememberNavController()
 ) {
-    // Check for existing session on startup to skip login
-    LaunchedEffect(Unit) {
-        val existingSession = sessionManager.currentUserId.first()
-        if (existingSession != null) {
-            navController.navigate(Screen.Dashboard.route) {
-                popUpTo(Screen.Login.route) { inclusive = true }
-            }
-        }
-    }
+    NavHost(navController = navController, startDestination = Screen.Splash.route) {
 
-    NavHost(navController = navController, startDestination = Screen.Login.route) {
+        // Splash: reads session from DataStore and routes without rendering Login first.
+        composable(Screen.Splash.route) {
+            val sessionViewModel: NavSessionViewModel = hiltViewModel()
+            LaunchedEffect(Unit) {
+                val userId = sessionViewModel.sessionManager.currentUserId.first()
+                val target = if (userId != null) Screen.Dashboard.route else Screen.Login.route
+                navController.navigate(target) {
+                    popUpTo(Screen.Splash.route) { inclusive = true }
+                }
+            }
+            Box(Modifier.fillMaxSize())
+        }
 
         composable(Screen.Login.route) {
             LoginScreen(onLoginSuccess = {

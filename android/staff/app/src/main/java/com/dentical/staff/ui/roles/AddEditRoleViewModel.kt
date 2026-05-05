@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.entities.PermissionFlags
 import com.dentical.staff.data.repository.RoleRepository
+import com.dentical.staff.data.session.CurrentUserProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -24,8 +25,12 @@ data class AddEditRoleUiState(
 
 @HiltViewModel
 class AddEditRoleViewModel @Inject constructor(
-    private val roleRepository: RoleRepository
+    private val roleRepository: RoleRepository,
+    private val currentUserProvider: CurrentUserProvider
 ) : ViewModel() {
+
+    private val _currentUser = currentUserProvider.currentUser
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _uiState = MutableStateFlow(AddEditRoleUiState())
     val uiState: StateFlow<AddEditRoleUiState> = _uiState.asStateFlow()
@@ -69,6 +74,11 @@ class AddEditRoleViewModel @Inject constructor(
     fun save(editingRoleId: Long = -1L) {
         val state = _uiState.value
         if (state.isSystem) return
+        val requiredPermission = if (state.isEditMode) _currentUser.value?.canUpdate("role") else _currentUser.value?.canCreate("role")
+        if (requiredPermission != true) {
+            _uiState.update { it.copy(errorMessage = "You don't have permission to perform this action") }
+            return
+        }
         if (state.name.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Role name is required") }
             return

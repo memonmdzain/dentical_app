@@ -39,8 +39,10 @@ fun RoleListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddRole, containerColor = DenticalBlue) {
-                Icon(Icons.Default.Add, contentDescription = "Add Role", tint = MaterialTheme.colorScheme.onPrimary)
+            if (state.canCreate) {
+                FloatingActionButton(onClick = onAddRole, containerColor = DenticalBlue) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Role", tint = MaterialTheme.colorScheme.onPrimary)
+                }
             }
         }
     ) { padding ->
@@ -56,9 +58,11 @@ fun RoleListScreen(
             ) {
                 items(state.roles, key = { it.id }) { role ->
                     RoleCard(
-                        role     = role,
-                        onEdit   = { onEditRole(role.id) },
-                        onDelete = { confirmDeleteRole = role }
+                        role      = role,
+                        canUpdate = state.canUpdate,
+                        canDelete = state.canDelete,
+                        onEdit    = { onEditRole(role.id) },
+                        onDelete  = { confirmDeleteRole = role }
                     )
                 }
             }
@@ -86,6 +90,8 @@ fun RoleListScreen(
 @Composable
 private fun RoleCard(
     role: RoleEntity,
+    canUpdate: Boolean,
+    canDelete: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -108,10 +114,12 @@ private fun RoleCard(
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = DenticalBlue)
+            if (canUpdate) {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = DenticalBlue)
+                }
             }
-            if (!role.isSystem) {
+            if (canDelete && !role.isSystem) {
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                 }
