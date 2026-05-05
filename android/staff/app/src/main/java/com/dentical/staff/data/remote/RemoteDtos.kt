@@ -9,9 +9,36 @@ data class UserDto(
     @SerialName("username")      val username: String,
     @SerialName("password_hash") val passwordHash: String,
     @SerialName("full_name")     val fullName: String,
-    @SerialName("role")          val role: String,
+    @SerialName("role")          val role: String? = null,   // legacy column, kept for backward compat
     @SerialName("is_active")     val isActive: Boolean = true,
-    @SerialName("created_at")    val createdAt: Long
+    @SerialName("created_at")    val createdAt: Long,
+    @SerialName("google_id")     val googleId: String? = null
+)
+
+@Serializable
+data class RoleDto(
+    @SerialName("id")          val id: Long = 0,
+    @SerialName("name")        val name: String,
+    @SerialName("description") val description: String? = null,
+    @SerialName("is_system")   val isSystem: Boolean = false,
+    @SerialName("created_at")  val createdAt: Long
+)
+
+@Serializable
+data class PermissionDto(
+    @SerialName("id")         val id: Long = 0,
+    @SerialName("role_id")    val roleId: Long,
+    @SerialName("resource")   val resource: String,
+    @SerialName("can_create") val canCreate: Boolean = false,
+    @SerialName("can_read")   val canRead: Boolean = false,
+    @SerialName("can_update") val canUpdate: Boolean = false,
+    @SerialName("can_delete") val canDelete: Boolean = false
+)
+
+@Serializable
+data class UserRoleCrossRefDto(
+    @SerialName("user_id") val userId: Long,
+    @SerialName("role_id") val roleId: Long
 )
 
 @Serializable

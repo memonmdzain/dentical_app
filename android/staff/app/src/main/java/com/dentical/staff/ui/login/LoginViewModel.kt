@@ -3,6 +3,7 @@ package com.dentical.staff.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dentical.staff.data.local.dao.UserDao
+import com.dentical.staff.data.session.SessionManager
 import com.dentical.staff.util.PasswordUtil
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,8 @@ data class LoginUiState(
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    private val userDao: UserDao
+    private val userDao: UserDao,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -51,25 +53,16 @@ class LoginViewModel @Inject constructor(
             val user = userDao.getUserByUsername(username)
 
             if (user == null || !PasswordUtil.verify(password, user.passwordHash)) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Invalid username or password"
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Invalid username or password") }
                 return@launch
             }
 
             if (!user.isActive) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Your account has been deactivated"
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Your account has been deactivated") }
                 return@launch
             }
 
+            sessionManager.setSession(user.id)
             _uiState.update { it.copy(isLoading = false, isLoggedIn = true) }
         }
     }

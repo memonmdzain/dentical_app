@@ -10,8 +10,10 @@ import com.dentical.staff.data.local.entities.PaymentMode
 import com.dentical.staff.data.local.entities.TreatmentEntity
 import com.dentical.staff.data.local.entities.TreatmentStatus
 import com.dentical.staff.data.local.entities.TreatmentVisitCrossRef
+import com.dentical.staff.data.local.entities.PermissionEntity
+import com.dentical.staff.data.local.entities.RoleEntity
 import com.dentical.staff.data.local.entities.UserEntity
-import com.dentical.staff.data.local.entities.UserRole
+import com.dentical.staff.data.local.entities.UserRoleCrossRef
 import com.dentical.staff.data.local.entities.VisitEntity
 
 fun UserEntity.toDto() = UserDto(
@@ -19,9 +21,10 @@ fun UserEntity.toDto() = UserDto(
     username     = username,
     passwordHash = passwordHash,
     fullName     = fullName,
-    role         = role.name,
+    role         = null,
     isActive     = isActive,
-    createdAt    = createdAt
+    createdAt    = createdAt,
+    googleId     = googleId
 )
 
 fun PatientEntity.toDto() = PatientDto(
@@ -160,6 +163,38 @@ fun TreatmentVisitCrossRefDto.toEntity() = TreatmentVisitCrossRef(
     treatmentId = treatmentId,
     visitId     = visitId,
     workDone    = workDone
+)
+
+// ── Role / Permission mappers ─────────────────────────────────────────────────
+
+fun RoleDto.toEntity() = RoleEntity(
+    id          = id,
+    name        = name,
+    description = description,
+    isSystem    = isSystem,
+    createdAt   = createdAt
+)
+
+fun PermissionDto.toEntity() = PermissionEntity(
+    id        = id,
+    roleId    = roleId,
+    resource  = resource,
+    canCreate = canCreate,
+    canRead   = canRead,
+    canUpdate = canUpdate,
+    canDelete = canDelete
+)
+
+fun UserRoleCrossRefDto.toEntity() = UserRoleCrossRef(userId = userId, roleId = roleId)
+
+fun UserDto.toEntity() = UserEntity(
+    id           = id,
+    username     = username,
+    passwordHash = passwordHash,
+    fullName     = fullName,
+    isActive     = isActive,
+    createdAt    = createdAt,
+    googleId     = googleId
 )
 
 fun InvoiceEntity.toDto() = InvoiceDto(

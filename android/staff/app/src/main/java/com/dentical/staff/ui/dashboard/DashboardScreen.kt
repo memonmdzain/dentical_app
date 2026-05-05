@@ -18,6 +18,7 @@ import com.dentical.staff.ui.navigation.Screen
 @Composable
 fun DashboardScreen(
     onNavigate: (String) -> Unit,
+    onProfile: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -39,6 +40,9 @@ fun DashboardScreen(
                         else
                             Icon(Icons.Default.Sync, "Sync",
                                 tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                    IconButton(onClick = onProfile) {
+                        Icon(Icons.Default.AccountCircle, "Profile", tint = MaterialTheme.colorScheme.onPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -72,6 +76,12 @@ fun DashboardScreen(
                     label = { Text("Billing") },
                     selected = false,
                     onClick = { onNavigate(Screen.Billing.route) }
+                )
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.Settings, "Settings") },
+                    label = { Text("Settings") },
+                    selected = false,
+                    onClick = { onNavigate(Screen.Settings.route) }
                 )
             }
         }

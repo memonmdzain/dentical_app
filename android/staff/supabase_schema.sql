@@ -5,14 +5,42 @@
 
 -- ── 1. Create Tables ─────────────────────────────────────────
 
+-- ── Roles & Permissions (added v7) ───────────────────────────
+
+CREATE TABLE IF NOT EXISTS roles (
+  id          bigserial PRIMARY KEY,
+  name        text NOT NULL UNIQUE,
+  description text,
+  is_system   boolean NOT NULL DEFAULT false,
+  created_at  bigint NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS permissions (
+  id         bigserial PRIMARY KEY,
+  role_id    bigint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  resource   text NOT NULL,
+  can_create boolean NOT NULL DEFAULT false,
+  can_read   boolean NOT NULL DEFAULT false,
+  can_update boolean NOT NULL DEFAULT false,
+  can_delete boolean NOT NULL DEFAULT false,
+  UNIQUE(role_id, resource)
+);
+
+CREATE TABLE IF NOT EXISTS user_role_cross_ref (
+  user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id bigint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, role_id)
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id            bigserial PRIMARY KEY,
   username      text NOT NULL UNIQUE,
   password_hash text NOT NULL,
   full_name     text NOT NULL,
-  role          text NOT NULL,        -- ADMIN | DENTIST | STAFF
+  role          text,                 -- legacy column, use user_role_cross_ref
   is_active     boolean NOT NULL DEFAULT true,
-  created_at    bigint NOT NULL
+  created_at    bigint NOT NULL,
+  google_id     text                  -- reserved for future OAuth
 );
 
 CREATE TABLE IF NOT EXISTS patients (
@@ -105,6 +133,9 @@ CREATE INDEX IF NOT EXISTS idx_invoice_patient ON invoices(patient_id);
 
 -- ── 2. Enable Row Level Security ─────────────────────────────
 
+ALTER TABLE roles                     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE permissions               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_role_cross_ref       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users                     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE patients                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments              ENABLE ROW LEVEL SECURITY;
@@ -115,6 +146,9 @@ ALTER TABLE invoices                  ENABLE ROW LEVEL SECURITY;
 
 -- Transitional policies: full CRUD via anon key (internal staff app).
 -- Replace with per-user policies when Google OAuth is added.
+CREATE POLICY "anon_all" ON roles                     FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all" ON permissions               FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all" ON user_role_cross_ref       FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON users                     FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON patients                  FOR ALL TO anon USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all" ON appointments              FOR ALL TO anon USING (true) WITH CHECK (true);

@@ -9,17 +9,32 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     suspend fun getUserById(id: Long): UserEntity?
 
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    fun getUserByIdFlow(id: Long): Flow<UserEntity?>
+
     @Query("SELECT * FROM users WHERE username = :username AND isActive = 1 LIMIT 1")
     suspend fun getUserByUsername(username: String): UserEntity?
 
-    @Query("SELECT * FROM users WHERE isActive = 1")
+    @Query("SELECT * FROM users WHERE isActive = 1 ORDER BY fullName ASC")
     fun getAllActiveUsers(): Flow<List<UserEntity>>
 
-    @Query("SELECT * FROM users WHERE role = 'DENTIST' AND isActive = 1 ORDER BY fullName ASC")
+    @Query("SELECT * FROM users ORDER BY fullName ASC")
+    fun getAllUsers(): Flow<List<UserEntity>>
+
+    @Query("""
+        SELECT u.* FROM users u
+        INNER JOIN user_role_cross_ref urc ON u.id = urc.userId
+        INNER JOIN roles r ON urc.roleId = r.id
+        WHERE r.name = 'DENTIST' AND u.isActive = 1
+        ORDER BY u.fullName ASC
+    """)
     fun getAllActiveDentists(): Flow<List<UserEntity>>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertUser(user: UserEntity): Long
+
+    @Upsert
+    suspend fun upsertAll(users: List<UserEntity>)
 
     @Update
     suspend fun updateUser(user: UserEntity)
@@ -27,8 +42,82 @@ interface UserDao {
     @Query("UPDATE users SET isActive = 0 WHERE id = :userId")
     suspend fun deactivateUser(userId: Long)
 
+    @Query("UPDATE users SET isActive = 1 WHERE id = :userId")
+    suspend fun activateUser(userId: Long)
+
     @Query("SELECT COUNT(*) FROM users")
     suspend fun getUserCount(): Int
+}
+
+@Dao
+interface RoleDao {
+    @Query("SELECT * FROM roles ORDER BY name ASC")
+    fun getAllRoles(): Flow<List<RoleEntity>>
+
+    @Query("SELECT * FROM roles WHERE id = :id LIMIT 1")
+    suspend fun getRoleById(id: Long): RoleEntity?
+
+    @Query("SELECT * FROM roles WHERE id = :id LIMIT 1")
+    fun getRoleByIdFlow(id: Long): Flow<RoleEntity?>
+
+    @Query("""
+        SELECT r.* FROM roles r
+        INNER JOIN user_role_cross_ref urc ON r.id = urc.roleId
+        WHERE urc.userId = :userId
+    """)
+    fun getRolesForUser(userId: Long): Flow<List<RoleEntity>>
+
+    @Query("""
+        SELECT r.* FROM roles r
+        INNER JOIN user_role_cross_ref urc ON r.id = urc.roleId
+        WHERE urc.userId = :userId
+    """)
+    suspend fun getRolesForUserOnce(userId: Long): List<RoleEntity>
+
+    @Query("SELECT * FROM permissions WHERE roleId = :roleId")
+    fun getPermissionsForRole(roleId: Long): Flow<List<PermissionEntity>>
+
+    @Query("SELECT * FROM permissions WHERE roleId IN (:roleIds)")
+    suspend fun getPermissionsForRoles(roleIds: List<Long>): List<PermissionEntity>
+
+    @Query("SELECT * FROM permissions WHERE roleId = :roleId")
+    suspend fun getPermissionsForRoleOnce(roleId: Long): List<PermissionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRole(role: RoleEntity): Long
+
+    @Update
+    suspend fun updateRole(role: RoleEntity)
+
+    @Delete
+    suspend fun deleteRole(role: RoleEntity)
+
+    @Upsert
+    suspend fun upsertPermissions(permissions: List<PermissionEntity>)
+
+    @Query("DELETE FROM permissions WHERE roleId = :roleId")
+    suspend fun deletePermissionsForRole(roleId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUserRoleCrossRef(crossRef: UserRoleCrossRef)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUserRoleCrossRefs(crossRefs: List<UserRoleCrossRef>)
+
+    @Query("DELETE FROM user_role_cross_ref WHERE userId = :userId")
+    suspend fun deleteUserRoles(userId: Long)
+
+    @Query("SELECT * FROM user_role_cross_ref WHERE userId = :userId")
+    suspend fun getUserRoleCrossRefsOnce(userId: Long): List<UserRoleCrossRef>
+
+    @Upsert
+    suspend fun upsertAllRoles(roles: List<RoleEntity>)
+
+    @Upsert
+    suspend fun upsertAllPermissions(permissions: List<PermissionEntity>)
+
+    @Upsert
+    suspend fun upsertAllUserRoleCrossRefs(crossRefs: List<UserRoleCrossRef>)
 }
 
 @Dao

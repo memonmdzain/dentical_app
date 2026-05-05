@@ -6,12 +6,7 @@ import com.dentical.staff.data.local.entities.AppointmentType
 import com.dentical.staff.data.local.entities.InvoiceStatus
 import com.dentical.staff.data.local.entities.PaymentMode
 import com.dentical.staff.data.local.entities.TreatmentStatus
-import com.dentical.staff.data.local.entities.UserRole
-
 class Converters {
-    @TypeConverter fun fromUserRole(v: UserRole): String = v.name
-    @TypeConverter fun toUserRole(v: String): UserRole = UserRole.valueOf(v)
-
     @TypeConverter fun fromAppointmentStatus(v: AppointmentStatus): String = v.name
     @TypeConverter fun toAppointmentStatus(v: String): AppointmentStatus = AppointmentStatus.valueOf(v)
 
