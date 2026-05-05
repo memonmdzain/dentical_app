@@ -9,6 +9,7 @@ import com.dentical.staff.data.remote.PermissionDto
 import com.dentical.staff.data.remote.RoleDto
 import com.dentical.staff.data.remote.SupabaseSyncHelper
 import com.dentical.staff.data.remote.UserRoleCrossRefDto
+import com.dentical.staff.data.remote.toDto
 import com.dentical.staff.data.remote.toEntity
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
@@ -55,29 +56,10 @@ class RoleRepository @Inject constructor(
         }
         roleDao.upsertPermissions(permEntities)
 
+        val savedRole = role.copy(id = roleId)
         sync.fireAndForget {
-            val createdRole = role.copy(id = roleId)
-            sync.supabase.from("roles").upsert(
-                mapOf(
-                    "id"          to roleId,
-                    "name"        to name,
-                    "description" to description,
-                    "is_system"   to false,
-                    "created_at"  to createdRole.createdAt
-                )
-            )
-            permEntities.forEach { p ->
-                sync.supabase.from("permissions").upsert(
-                    mapOf(
-                        "role_id"    to roleId,
-                        "resource"   to p.resource,
-                        "can_create" to p.canCreate,
-                        "can_read"   to p.canRead,
-                        "can_update" to p.canUpdate,
-                        "can_delete" to p.canDelete
-                    )
-                )
-            }
+            sync.supabase.from("roles").upsert(savedRole.toDto())
+            sync.supabase.from("permissions").upsert(permEntities.map { it.toDto() })
         }
         return roleId
     }
@@ -106,28 +88,9 @@ class RoleRepository @Inject constructor(
         roleDao.upsertPermissions(permEntities)
 
         sync.fireAndForget {
-            sync.supabase.from("roles").upsert(
-                mapOf(
-                    "id"          to roleId,
-                    "name"        to name,
-                    "description" to description,
-                    "is_system"   to existing.isSystem,
-                    "created_at"  to existing.createdAt
-                )
-            )
+            sync.supabase.from("roles").upsert(updated.toDto())
             sync.supabase.from("permissions").delete { filter { eq("role_id", roleId) } }
-            permEntities.forEach { p ->
-                sync.supabase.from("permissions").upsert(
-                    mapOf(
-                        "role_id"    to roleId,
-                        "resource"   to p.resource,
-                        "can_create" to p.canCreate,
-                        "can_read"   to p.canRead,
-                        "can_update" to p.canUpdate,
-                        "can_delete" to p.canDelete
-                    )
-                )
-            }
+            sync.supabase.from("permissions").upsert(permEntities.map { it.toDto() })
         }
     }
 

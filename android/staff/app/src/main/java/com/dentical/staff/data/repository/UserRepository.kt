@@ -9,6 +9,7 @@ import com.dentical.staff.data.local.entities.UserWithRoles
 import com.dentical.staff.data.local.entities.mergePermissions
 import com.dentical.staff.data.remote.SupabaseSyncHelper
 import com.dentical.staff.data.remote.UserDto
+import com.dentical.staff.data.remote.toDto
 import com.dentical.staff.data.remote.toEntity
 import com.dentical.staff.util.PasswordUtil
 import io.github.jan.supabase.postgrest.from
@@ -66,22 +67,10 @@ class UserRepository @Inject constructor(
         val crossRefs = roleIds.map { UserRoleCrossRef(id, it) }
         roleDao.insertUserRoleCrossRefs(crossRefs)
 
+        val savedUser = user.copy(id = id)
         sync.fireAndForget {
-            sync.supabase.from("users").upsert(
-                mapOf(
-                    "id"            to id,
-                    "username"      to username,
-                    "password_hash" to user.passwordHash,
-                    "full_name"     to fullName,
-                    "is_active"     to isActive,
-                    "created_at"    to user.createdAt
-                )
-            )
-            crossRefs.forEach { ref ->
-                sync.supabase.from("user_role_cross_ref").upsert(
-                    mapOf("user_id" to ref.userId, "role_id" to ref.roleId)
-                )
-            }
+            sync.supabase.from("users").upsert(savedUser.toDto())
+            sync.supabase.from("user_role_cross_ref").upsert(crossRefs.map { it.toDto() })
         }
         return id
     }
@@ -101,24 +90,9 @@ class UserRepository @Inject constructor(
         roleDao.insertUserRoleCrossRefs(crossRefs)
 
         sync.fireAndForget {
-            sync.supabase.from("users").upsert(
-                mapOf(
-                    "id"         to userId,
-                    "username"   to existing.username,
-                    "password_hash" to existing.passwordHash,
-                    "full_name"  to fullName,
-                    "is_active"  to isActive,
-                    "created_at" to existing.createdAt
-                )
-            )
-            sync.supabase.from("user_role_cross_ref").delete {
-                filter { eq("user_id", userId) }
-            }
-            crossRefs.forEach { ref ->
-                sync.supabase.from("user_role_cross_ref").upsert(
-                    mapOf("user_id" to ref.userId, "role_id" to ref.roleId)
-                )
-            }
+            sync.supabase.from("users").upsert(updated.toDto())
+            sync.supabase.from("user_role_cross_ref").delete { filter { eq("user_id", userId) } }
+            sync.supabase.from("user_role_cross_ref").upsert(crossRefs.map { it.toDto() })
         }
     }
 
@@ -127,16 +101,7 @@ class UserRepository @Inject constructor(
         val updated = existing.copy(passwordHash = PasswordUtil.hash(newPassword))
         userDao.updateUser(updated)
         sync.fireAndForget {
-            sync.supabase.from("users").upsert(
-                mapOf(
-                    "id"            to userId,
-                    "username"      to existing.username,
-                    "password_hash" to updated.passwordHash,
-                    "full_name"     to existing.fullName,
-                    "is_active"     to existing.isActive,
-                    "created_at"    to existing.createdAt
-                )
-            )
+            sync.supabase.from("users").upsert(updated.toDto())
         }
     }
 

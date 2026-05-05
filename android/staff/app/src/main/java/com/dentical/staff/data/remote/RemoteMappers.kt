@@ -187,6 +187,26 @@ fun PermissionDto.toEntity() = PermissionEntity(
 
 fun UserRoleCrossRefDto.toEntity() = UserRoleCrossRef(userId = userId, roleId = roleId)
 
+fun RoleEntity.toDto() = RoleDto(
+    id          = id,
+    name        = name,
+    description = description,
+    isSystem    = isSystem,
+    createdAt   = createdAt
+)
+
+fun PermissionEntity.toDto() = PermissionDto(
+    id        = id,
+    roleId    = roleId,
+    resource  = resource,
+    canCreate = canCreate,
+    canRead   = canRead,
+    canUpdate = canUpdate,
+    canDelete = canDelete
+)
+
+fun UserRoleCrossRef.toDto() = UserRoleCrossRefDto(userId = userId, roleId = roleId)
+
 fun UserDto.toEntity() = UserEntity(
     id           = id,
     username     = username,
