@@ -34,7 +34,7 @@ class AddEditUserViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _currentUser = currentUserProvider.currentUser
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _uiState = MutableStateFlow(AddEditUserUiState())
     val uiState: StateFlow<AddEditUserUiState> = _uiState.asStateFlow()

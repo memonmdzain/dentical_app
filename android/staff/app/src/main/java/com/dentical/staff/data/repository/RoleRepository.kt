@@ -8,6 +8,7 @@ import com.dentical.staff.data.local.entities.RoleEntity
 import com.dentical.staff.data.remote.PermissionDto
 import com.dentical.staff.data.remote.RoleDto
 import com.dentical.staff.data.remote.SupabaseSyncHelper
+import com.dentical.staff.data.remote.UserRoleCrossRefDto
 import com.dentical.staff.data.remote.toEntity
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
@@ -144,6 +145,9 @@ class RoleRepository @Inject constructor(
 
             val permDtos = sync.supabase.from("permissions").select().decodeList<PermissionDto>()
             roleDao.upsertAllPermissions(permDtos.map { it.toEntity() })
+
+            val crossRefDtos = sync.supabase.from("user_role_cross_ref").select().decodeList<UserRoleCrossRefDto>()
+            roleDao.upsertAllUserRoleCrossRefs(crossRefDtos.map { it.toEntity() })
         } catch (e: Exception) {
             Log.e("SupabaseSync", "Pull roles failed", e)
         }
