@@ -3,9 +3,8 @@ package com.dentical.staff.data.local.entities
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-enum class UserRole {
-    ADMIN, DENTIST, STAFF
-}
+// Kept for migration seeding only — no longer stored on UserEntity
+enum class UserRole { ADMIN, DENTIST, STAFF }
 
 @Entity(tableName = "users")
 data class UserEntity(
@@ -14,7 +13,7 @@ data class UserEntity(
     val username: String,
     val passwordHash: String,
     val fullName: String,
-    val role: UserRole,
     val isActive: Boolean = true,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val googleId: String? = null
 )

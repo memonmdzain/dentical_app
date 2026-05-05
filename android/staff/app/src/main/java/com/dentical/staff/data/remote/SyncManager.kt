@@ -5,7 +5,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.dentical.staff.data.repository.AppointmentRepository
 import com.dentical.staff.data.repository.PatientRepository
+import com.dentical.staff.data.repository.RoleRepository
 import com.dentical.staff.data.repository.TreatmentRepository
+import com.dentical.staff.data.repository.UserRepository
 import com.dentical.staff.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -18,6 +20,8 @@ import javax.inject.Singleton
 
 @Singleton
 class SyncManager @Inject constructor(
+    private val roleRepository: RoleRepository,
+    private val userRepository: UserRepository,
     private val patientRepository: PatientRepository,
     private val appointmentRepository: AppointmentRepository,
     private val treatmentRepository: TreatmentRepository,
@@ -30,7 +34,6 @@ class SyncManager @Inject constructor(
     val canSync: StateFlow<Boolean> = _canSync.asStateFlow()
 
     init {
-        // Auto-sync whenever the app comes to the foreground (every app open)
         ProcessLifecycleOwner.get().lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_START) forceSync()
@@ -44,6 +47,8 @@ class SyncManager @Inject constructor(
         _canSync.value = false
         scope.launch {
             try {
+                roleRepository.pullFromSupabase()
+                userRepository.pullFromSupabase()
                 patientRepository.pullFromSupabase()
                 appointmentRepository.pullFromSupabase()
                 treatmentRepository.pullAll()
@@ -52,7 +57,6 @@ class SyncManager @Inject constructor(
             } finally {
                 _isSyncing.value = false
             }
-            // Re-enable the sync button after 30-second cooldown
             delay(30_000L)
             _canSync.value = true
         }
