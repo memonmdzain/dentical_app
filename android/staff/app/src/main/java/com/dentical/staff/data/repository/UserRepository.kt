@@ -15,6 +15,9 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,10 +27,18 @@ class UserRepository @Inject constructor(
     private val roleDao: RoleDao,
     private val sync: SupabaseSyncHelper
 ) {
-    fun getAllUsers(): Flow<List<UserWithRoles>> {
-        val usersFlow = userDao.getAllUsers()
-        return usersFlow
-    }
+    fun getAllUsers(): Flow<List<UserWithRoles>> =
+        userDao.getAllUsers().flatMapLatest { users ->
+            if (users.isEmpty()) return@flatMapLatest flowOf(emptyList())
+            combine(users.map { user ->
+                roleDao.getRolesForUser(user.id).map { roles ->
+                    val roleIds = roles.map { it.id }
+                    val perms = if (roleIds.isEmpty()) emptyList()
+                                else roleDao.getPermissionsForRoles(roleIds)
+                    UserWithRoles(user, roles, mergePermissions(perms))
+                }
+            }) { it.toList() }
+        }
 
     suspend fun getUserWithRoles(userId: Long): UserWithRoles? {
         val user = userDao.getUserById(userId) ?: return null
