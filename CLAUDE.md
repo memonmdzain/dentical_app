@@ -99,13 +99,19 @@ android/staff/app/src/main/java/com/dentical/staff/
 android/feature/xxx → develop (PR) → main (PR + release tag)
 ```
 
+### Branch Naming Convention
+**IMPORTANT for Claude sessions:** Always use the project convention — never use `claude/*` auto-generated names.
+- Features: `android/feature/<short-description>` (e.g. `android/feature/user-role-management`)
+- Bug fixes: `android/fix/<short-description>` (e.g. `android/fix/login-crash`)
+- If a session starts on a `claude/*` branch, immediately rename it to follow the convention above.
+
 ### IMPORTANT — Code Access Between Sessions
 - Merge working features to `develop` after each test
 - New session: tap + → Add from GitHub → select files needed
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`android/feature/supabase-integration` — ready to merge into `develop`
+`android/feature/user-role-management` — User & Roles management module (in progress)
 
 ---
 
@@ -364,4 +370,4 @@ git push origin develop
 
 ---
 
-> Last updated: May 2026 — android/feature/supabase-integration: Supabase cloud sync (offline-first, write-on-mutation, full read sync on every app open via ProcessLifecycleOwner + manual sync button with 30-sec cooldown on every screen)
+> Last updated: May 2026 — android/feature/user-role-management: User & Roles management module (dynamic RBAC — roles table, permissions per entity/screen, many-to-many user↔role via cross-ref, session persistence via DataStore, profile screen, admin user/role CRUD UI)
