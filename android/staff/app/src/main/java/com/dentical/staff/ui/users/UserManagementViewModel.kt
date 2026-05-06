@@ -2,7 +2,6 @@ package com.dentical.staff.ui.users
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dentical.staff.data.local.dao.UserDao
 import com.dentical.staff.data.local.entities.UserWithRoles
 import com.dentical.staff.data.repository.UserRepository
 import com.dentical.staff.data.session.CurrentUserProvider
@@ -22,7 +21,6 @@ data class UserListUiState(
 
 @HiltViewModel
 class UserManagementViewModel @Inject constructor(
-    private val userDao: UserDao,
     private val userRepository: UserRepository,
     private val currentUserProvider: CurrentUserProvider
 ) : ViewModel() {
@@ -57,8 +55,7 @@ class UserManagementViewModel @Inject constructor(
     fun toggleActive(userId: Long, currentlyActive: Boolean) {
         if (_currentUser.value?.canUpdate("user") != true) return
         viewModelScope.launch {
-            if (currentlyActive) userDao.deactivateUser(userId)
-            else userDao.activateUser(userId)
+            userRepository.toggleActive(userId, currentlyActive)
         }
     }
 }

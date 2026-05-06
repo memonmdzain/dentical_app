@@ -94,6 +94,13 @@ class UserRepository @Inject constructor(
         }
     }
 
+    suspend fun toggleActive(userId: Long, currentlyActive: Boolean) {
+        if (currentlyActive) userDao.deactivateUser(userId)
+        else userDao.activateUser(userId)
+        val updated = userDao.getUserById(userId) ?: return
+        sync.fireAndForget { sync.supabase.from("users").upsert(updated.toDto()) }
+    }
+
     suspend fun changePassword(userId: Long, newPassword: String) {
         val existing = userDao.getUserById(userId) ?: return
         val updated = existing.copy(passwordHash = PasswordUtil.hash(newPassword))
