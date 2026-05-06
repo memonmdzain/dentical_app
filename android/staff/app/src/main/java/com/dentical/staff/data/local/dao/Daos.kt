@@ -110,6 +110,9 @@ interface RoleDao {
     @Query("SELECT * FROM user_role_cross_ref WHERE userId = :userId")
     suspend fun getUserRoleCrossRefsOnce(userId: Long): List<UserRoleCrossRef>
 
+    @Query("SELECT * FROM roles")
+    suspend fun getAllRolesOnce(): List<RoleEntity>
+
     @Upsert
     suspend fun upsertAllRoles(roles: List<RoleEntity>)
 

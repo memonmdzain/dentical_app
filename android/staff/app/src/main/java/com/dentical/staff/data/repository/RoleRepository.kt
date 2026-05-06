@@ -104,10 +104,22 @@ class RoleRepository @Inject constructor(
         if (!sync.isConnected) return
         try {
             val roleDtos = sync.supabase.from("roles").select().decodeList<RoleDto>()
-            roleDao.upsertAllRoles(roleDtos.map { it.toEntity() })
-
-            val permDtos = sync.supabase.from("permissions").select().decodeList<PermissionDto>()
-            roleDao.upsertAllPermissions(permDtos.map { it.toEntity() })
+            if (roleDtos.isEmpty()) {
+                // Supabase has no roles — push local seeded roles so FK constraints on
+                // user_role_cross_ref can be satisfied for subsequent user writes.
+                val localRoles = roleDao.getAllRolesOnce()
+                if (localRoles.isNotEmpty()) {
+                    sync.supabase.from("roles").upsert(localRoles.map { it.toDto() })
+                    val perms = roleDao.getPermissionsForRoles(localRoles.map { it.id })
+                    if (perms.isNotEmpty()) {
+                        sync.supabase.from("permissions").upsert(perms.map { it.toDto() })
+                    }
+                }
+            } else {
+                roleDao.upsertAllRoles(roleDtos.map { it.toEntity() })
+                val permDtos = sync.supabase.from("permissions").select().decodeList<PermissionDto>()
+                roleDao.upsertAllPermissions(permDtos.map { it.toEntity() })
+            }
 
             val crossRefDtos = sync.supabase.from("user_role_cross_ref").select().decodeList<UserRoleCrossRefDto>()
             roleDao.upsertAllUserRoleCrossRefs(crossRefDtos.map { it.toEntity() })

@@ -68,10 +68,8 @@ class UserRepository @Inject constructor(
         roleDao.insertUserRoleCrossRefs(crossRefs)
 
         val savedUser = user.copy(id = id)
-        sync.fireAndForget {
-            sync.supabase.from("users").upsert(savedUser.toDto())
-            sync.supabase.from("user_role_cross_ref").upsert(crossRefs.map { it.toDto() })
-        }
+        sync.fireAndForget { sync.supabase.from("users").upsert(savedUser.toDto()) }
+        sync.fireAndForget { sync.supabase.from("user_role_cross_ref").upsert(crossRefs.map { it.toDto() }) }
         return id
     }
 
@@ -89,8 +87,8 @@ class UserRepository @Inject constructor(
         val crossRefs = roleIds.map { UserRoleCrossRef(userId, it) }
         roleDao.insertUserRoleCrossRefs(crossRefs)
 
+        sync.fireAndForget { sync.supabase.from("users").upsert(updated.toDto()) }
         sync.fireAndForget {
-            sync.supabase.from("users").upsert(updated.toDto())
             sync.supabase.from("user_role_cross_ref").delete { filter { eq("user_id", userId) } }
             sync.supabase.from("user_role_cross_ref").upsert(crossRefs.map { it.toDto() })
         }
