@@ -154,15 +154,23 @@ android/feature/xxx → develop (PR) → main (PR + release tag)
 
 ---
 
-## Seeded Users (fresh install)
+## First-Run Setup
 
-| Username | Password | Role |
-|----------|----------|------|
-| admin | admin123 | ADMIN |
-| dr.smith | dentist123 | DENTIST |
-| dr.jones | dentist123 | DENTIST |
+No users are seeded on install. The clinic owner must insert the first admin via Supabase SQL before the app is used:
 
-> Dummy dentists for testing — removed when Settings feature is built.
+```sql
+-- Compute SHA-256 of your chosen password (e.g. sha256.online), then:
+INSERT INTO users (username, password_hash, full_name, role, is_active, created_at)
+VALUES ('admin', '<sha256-hex>', 'Administrator', '', true,
+        extract(epoch from now())::bigint * 1000);
+
+INSERT INTO user_role_cross_ref (user_id, role_id)
+VALUES ((SELECT id FROM users WHERE username = 'admin'), 1);
+```
+
+On first app open, SyncManager pulls this user + cross-ref into Room. Wait 2–3 seconds (or tap Sync) before logging in.
+
+System roles (ADMIN/DENTIST/STAFF) and their permissions are still seeded locally on fresh install and pushed to Supabase on first sync.
 
 ---
 

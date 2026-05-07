@@ -8,7 +8,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.dentical.staff.data.local.DenticalDatabase
-import com.dentical.staff.util.PasswordUtil
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -72,17 +71,6 @@ object DatabaseModule {
                     db.execSQL("INSERT INTO permissions (roleId, resource, canCreate, canRead, canUpdate, canDelete) VALUES (3, '$res', 0, 1, 0, 0)")
                 }
 
-                // Seed demo users and assign roles
-                val adminHash = PasswordUtil.hash("admin123")
-                db.execSQL("INSERT INTO users (id, username, passwordHash, fullName, isActive, createdAt) VALUES (1, 'admin', '$adminHash', 'Administrator', 1, $now)")
-                db.execSQL("INSERT INTO user_role_cross_ref (userId, roleId) VALUES (1, 1)")
-
-                val dentistHash = PasswordUtil.hash("dentist123")
-                db.execSQL("INSERT INTO users (id, username, passwordHash, fullName, isActive, createdAt) VALUES (2, 'dr.smith', '$dentistHash', 'Dr. John Smith', 1, $now)")
-                db.execSQL("INSERT INTO user_role_cross_ref (userId, roleId) VALUES (2, 2)")
-
-                db.execSQL("INSERT INTO users (id, username, passwordHash, fullName, isActive, createdAt) VALUES (3, 'dr.jones', '$dentistHash', 'Dr. Sarah Jones', 1, $now)")
-                db.execSQL("INSERT INTO user_role_cross_ref (userId, roleId) VALUES (3, 2)")
             }
         })
         .build()
