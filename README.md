@@ -69,9 +69,26 @@ Internal app for clinic staff. Distributed as private APK.
 - **Treatments**: add, edit, ongoing/past sections, standalone visits section, FIFO payment allocation
 - **Visits**: add (Cash/GPay/Bank Transfer), edit; overpayment blocked at entry
 - **Treatment detail**: full visit history, per-visit edit, mark complete (payment gate), cancel (partial charge + refund), reopen
-- **Cloud sync**: auto-sync on every app open; manual sync button (with 30-sec cooldown) on every screen
+- **Settings** (Admin only): user management (create/edit staff accounts, assign roles), role management (custom roles with per-resource C/R/U/D permissions), profile & password change
+- **Cloud sync**: auto-sync on every app open; manual sync button (with 30-sec cooldown) on every screen; sync progress visible on login screen
 - Billing & payments — planned
 - Push reminders — planned
+
+## First-Run Setup
+
+No users are seeded on install. Before first use, insert the first admin in Supabase:
+
+```sql
+-- Compute SHA-256 of your password (e.g. sha256.online), then:
+INSERT INTO users (username, password_hash, full_name, role, is_active, created_at)
+VALUES ('admin', '<sha256-hex>', 'Administrator', '', true,
+        extract(epoch from now())::bigint * 1000);
+
+INSERT INTO user_role_cross_ref (user_id, role_id)
+VALUES ((SELECT id FROM users WHERE username = 'admin'), 1);
+```
+
+Open the app and wait for the sync progress bar to disappear (or tap "Sync from server"), then log in.
 
 ### Patient App (`android/patient/`) — Planned
 Public app for patients. Distributed via Play Store.
