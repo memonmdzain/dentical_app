@@ -132,7 +132,8 @@ fun DenticalNavHost(
             PatientListScreen(
                 onAddPatient  = { navController.navigate(Screen.AddPatient.route) },
                 onPatientClick = { navController.navigate(Screen.PatientDetail.createRoute(it)) },
-                onBack        = { navController.popBackStack() }
+                onBack        = { navController.popBackStack() },
+                onScheduleAppointment = { patientId -> navController.navigate(Screen.AddAppointment.createRoute(patientId)) }
             )
         }
         composable(Screen.AddPatient.route) {
@@ -164,7 +165,8 @@ fun DenticalNavHost(
                 onAddTreatment = { navController.navigate(Screen.AddTreatment.createRoute(patientId)) },
                 onAddVisit     = { navController.navigate(Screen.AddVisit.createRoute(patientId)) },
                 onEditVisit    = { visitId -> navController.navigate(Screen.EditVisit.createRoute(patientId, visitId)) },
-                onTreatmentClick = { treatmentId -> navController.navigate(Screen.TreatmentDetail.createRoute(patientId, treatmentId)) }
+                onTreatmentClick = { treatmentId -> navController.navigate(Screen.TreatmentDetail.createRoute(patientId, treatmentId)) },
+                onScheduleAppointment = { navController.navigate(Screen.AddAppointment.createRoute(patientId)) }
             )
         }
 
