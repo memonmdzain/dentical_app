@@ -2,11 +2,17 @@ package com.dentical.staff
 
 import android.app.Application
 import android.content.Context
+import com.dentical.staff.data.remote.SyncManager
 import dagger.hilt.android.HiltAndroidApp
 import java.io.File
+import javax.inject.Inject
 
 @HiltAndroidApp
 class DenticalApplication : Application() {
+
+    // Eager-init so the ProcessLifecycleOwner observer is registered before any Activity starts.
+    @Inject lateinit var syncManager: SyncManager
+
     override fun onCreate() {
         super.onCreate()
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()

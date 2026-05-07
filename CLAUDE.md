@@ -43,43 +43,57 @@ dentical_app/
 android/staff/app/src/main/java/com/dentical/staff/
 ├── data/
 │   ├── local/
-│   │   ├── dao/Daos.kt
+│   │   ├── dao/Daos.kt              (UserDao, RoleDao, PatientDao, AppointmentDao, …)
 │   │   ├── entities/
-│   │   │   ├── UserEntity.kt        (roles: ADMIN, DENTIST, STAFF)
+│   │   │   ├── UserEntity.kt        (id, username, passwordHash, fullName, isActive, googleId)
+│   │   │   ├── RoleEntity.kt        (id, name, description, isSystem, createdAt)
+│   │   │   ├── PermissionEntity.kt  (roleId FK, resource, canCreate/Read/Update/Delete)
+│   │   │   ├── UserRoleCrossRef.kt  (userId FK, roleId FK — many-to-many)
+│   │   │   ├── UserWithRoles.kt     (data class — user + merged permissions)
 │   │   │   ├── PatientEntity.kt
 │   │   │   ├── AppointmentEntity.kt (type enum + dentistId)
 │   │   │   └── TreatmentAndInvoiceEntities.kt
 │   │   ├── Converters.kt
-│   │   └── DenticalDatabase.kt     (version 6, exportSchema=false)
+│   │   └── DenticalDatabase.kt     (version 7, exportSchema=false)
 │   ├── remote/
-│   │   ├── RemoteDtos.kt           (7 @Serializable DTOs with @SerialName snake_case)
+│   │   ├── RemoteDtos.kt           (@Serializable DTOs: UserDto, RoleDto, PermissionDto, UserRoleCrossRefDto, …)
 │   │   ├── RemoteMappers.kt        (Entity↔DTO extension functions)
 │   │   ├── SupabaseSyncHelper.kt   (fireAndForget write-sync, delete)
-│   │   └── SyncManager.kt          (@Singleton — orchestrates full pull; auto on app open + sync button)
-│   └── repository/
-│       ├── PatientRepository.kt    (pullFromSupabase)
-│       ├── AppointmentRepository.kt (pullFromSupabase)
-│       └── TreatmentRepository.kt  (pullAll, pullForPatient)
+│   │   └── SyncManager.kt          (@Singleton — eager-init via Application; full pull on ON_START + sync button)
+│   ├── repository/
+│   │   ├── UserRepository.kt       (CRUD + pullFromSupabase + changePassword)
+│   │   ├── RoleRepository.kt       (CRUD + pullFromSupabase; pushes local roles to Supabase on first sync)
+│   │   ├── PatientRepository.kt    (pullFromSupabase)
+│   │   ├── AppointmentRepository.kt (pullFromSupabase)
+│   │   └── TreatmentRepository.kt  (pullAll, pullForPatient)
+│   └── session/
+│       ├── SessionManager.kt       (DataStore — persists logged-in userId across restarts)
+│       └── CurrentUserProvider.kt  (StateFlow<UserWithRoles?> — merged user + roles + permissions)
 ├── di/
-│   ├── DatabaseModule.kt
+│   ├── DatabaseModule.kt           (provides all DAOs + DataStore)
 │   └── SupabaseModule.kt           (SupabaseClient + ApplicationScope)
 ├── ui/
 │   ├── theme/
 │   ├── navigation/DenticalNavHost.kt
-│   ├── login/                       ✅ Done
+│   ├── login/                       ✅ Done (sync indicator + manual Sync button)
 │   ├── dashboard/                   ✅ Done
-│   │   ├── DashboardScreen.kt
-│   │   ├── DashboardViewModel.kt
-│   │   ├── DashboardPatientListScreen.kt
-│   │   └── DashboardPatientListViewModel.kt
 │   ├── patients/                    ✅ Done
 │   ├── appointments/                ✅ Done
+│   ├── treatments/                  ✅ Done
+│   ├── users/                       ✅ Done
+│   │   ├── UserListScreen.kt
+│   │   ├── AddEditUserScreen.kt
+│   │   └── UserProfileScreen.kt
+│   ├── roles/                       ✅ Done
+│   │   ├── RoleListScreen.kt
+│   │   └── AddEditRoleScreen.kt
+│   ├── settings/                    ✅ Done (Admin only — links to Users + Roles)
 │   ├── billing/                     ⏳ Planned
-│   ├── reminders/                   ⏳ Planned
-│   └── settings/                    ⏳ Planned
+│   └── reminders/                   ⏳ Planned
 └── util/
     ├── NetworkMonitor.kt            (ConnectivityManager wrapper)
-    ├── PasswordUtil.kt
+    ├── PasswordUtil.kt              (SHA-256 hash + verify)
+    ├── PermissionChecker.kt         (canCreate/Read/Update/Delete per resource, from CurrentUserProvider)
     └── PhoneUtil.kt
 ```
 
@@ -99,13 +113,19 @@ android/staff/app/src/main/java/com/dentical/staff/
 android/feature/xxx → develop (PR) → main (PR + release tag)
 ```
 
+### Branch Naming Convention
+**IMPORTANT for Claude sessions:** Always use the project convention — never use `claude/*` auto-generated names.
+- Features: `android/feature/<short-description>` (e.g. `android/feature/user-role-management`)
+- Bug fixes: `android/fix/<short-description>` (e.g. `android/fix/login-crash`)
+- If a session starts on a `claude/*` branch, immediately rename it to follow the convention above.
+
 ### IMPORTANT — Code Access Between Sessions
 - Merge working features to `develop` after each test
 - New session: tap + → Add from GitHub → select files needed
 - Claude reads from whatever branch you share
 
 ### Current active branch
-`android/feature/supabase-integration` — ready to merge into `develop`
+`develop` — user-role-management merged; next feature TBD
 
 ---
 
@@ -148,15 +168,23 @@ android/feature/xxx → develop (PR) → main (PR + release tag)
 
 ---
 
-## Seeded Users (fresh install)
+## First-Run Setup
 
-| Username | Password | Role |
-|----------|----------|------|
-| admin | admin123 | ADMIN |
-| dr.smith | dentist123 | DENTIST |
-| dr.jones | dentist123 | DENTIST |
+No users are seeded on install. The clinic owner must insert the first admin via Supabase SQL before the app is used:
 
-> Dummy dentists for testing — removed when Settings feature is built.
+```sql
+-- Compute SHA-256 of your chosen password (e.g. sha256.online), then:
+INSERT INTO users (username, password_hash, full_name, role, is_active, created_at)
+VALUES ('admin', '<sha256-hex>', 'Administrator', '', true,
+        extract(epoch from now())::bigint * 1000);
+
+INSERT INTO user_role_cross_ref (user_id, role_id)
+VALUES ((SELECT id FROM users WHERE username = 'admin'), 1);
+```
+
+On first app open, SyncManager pulls this user + cross-ref into Room. Wait 2–3 seconds (or tap Sync) before logging in.
+
+System roles (ADMIN/DENTIST/STAFF) and their permissions are still seeded locally on fresh install and pushed to Supabase on first sync.
 
 ---
 
@@ -172,13 +200,14 @@ android/feature/xxx → develop (PR) → main (PR + release tag)
 
 ## Database
 
-- Version: 6, exportSchema: false
+- Version: 7, exportSchema: false
 - `fallbackToDestructiveMigration()` enabled — wipes DB if no migration path found (dev phase only; remove before launch)
 - Migration 1→2: patients table rebuilt
 - Migration 2→3: appointments table rebuilt with type + dentistId
 - Migration 3→4: treatments + visits + treatment_visit_cross_ref tables added
 - Migration 4→5: tables recreated without SQL DEFAULT clauses (Room schema fix) + paymentMode column on visits
 - Migration 5→6: force clean slate for any device with a broken version-5 schema (same drop+recreate)
+- Migration 6→7: roles + permissions + user_role_cross_ref tables added; googleId column added to users; legacy role text column backfilled into cross-refs
 
 ---
 
@@ -190,17 +219,19 @@ android/feature/xxx → develop (PR) → main (PR + release tag)
 Every Room mutation fires a background `upsert`/`delete` to Supabase via `SupabaseSyncHelper.fireAndForget`. Failures are logged, never block the user.
 
 ### Read sync — `SyncManager` (@Singleton)
-- **Auto on app open**: observes `ProcessLifecycleOwner` ON_START — fires a full pull every time the app comes to the foreground
-- **Manual sync button**: `Icons.Default.Sync` in every screen's TopAppBar; calls `syncManager.syncAll()` with a 30-second cooldown; shows spinner while syncing, greyed-out during cooldown
-- **Full pull order** (FK-safe): patients → appointments → treatments → visits → treatment_visit_cross_ref
+- **Eager init**: injected into `DenticalApplication` so the `ProcessLifecycleOwner.ON_START` observer is registered before any Activity starts
+- **Auto on app open**: fires a full pull every time the app comes to the foreground
+- **Manual sync button**: `Icons.Default.Sync` in every screen's TopAppBar (and a "Sync from server" TextButton on the Login screen); calls `syncManager.syncAll()` with a 30-second cooldown; shows spinner while syncing, greyed-out during cooldown
+- **Full pull order** (FK-safe): roles → users → patients → appointments → treatments → visits → treatment_visit_cross_ref
 - **Per-patient pull**: `TreatmentRepository.pullForPatient(id)` fires the first time a `PatientDetailScreen` opens for a given patient
+- **Role bootstrap**: if Supabase `roles` table is empty on first pull, local seeded roles + permissions are pushed up automatically
 
 ---
 
 ## Screen Structure
 
 ```
-Login ✅
+Login ✅ (sync progress bar + "Sync from server" button)
 └── Dashboard ✅
     ├── Ongoing Treatments card ✅ (count, tappable)
     │   └── Ongoing Patients List ✅
@@ -234,7 +265,14 @@ Login ✅
     │           └── Reopen Treatment (quoted cost dialog as confirmation) ✅
     ├── Billing ⏳
     ├── Reminders ⏳
-    └── Settings ⏳ (Admin only)
+    └── Settings ✅ (Admin only)
+        ├── Manage Users ✅
+        │   ├── User List ✅ (search, active/inactive chip, role badge)
+        │   └── Add / Edit User ✅ (username, password, full name, role assignment, active toggle)
+        ├── Manage Roles ✅
+        │   ├── Role List ✅ (system roles locked, custom roles deletable)
+        │   └── Add / Edit Role ✅ (name, description, permission matrix: C/R/U/D per resource)
+        └── My Profile ✅ (view own details, change password)
 ```
 
 All screens have a Sync button (TopAppBar) tied to the shared `SyncManager`.
@@ -275,7 +313,7 @@ All screens have a Sync button (TopAppBar) tied to the shared `SyncManager`.
 - [x] Supabase cloud sync (offline-first, write on mutation, full read sync on app open + sync button)
 - [ ] Billing & invoices
 - [ ] Push reminders
-- [ ] Settings — staff management
+- [x] Settings — user & role management (dynamic RBAC, user CRUD, role CRUD, permission matrix, profile + password change)
 
 ### Phase 2 — Auth & Notifications
 - [ ] Google OAuth via Supabase Auth (replaces anon RLS policies with per-user policies)
@@ -334,6 +372,15 @@ All screens have a Sync button (TopAppBar) tied to the shared `SyncManager`.
 | Supabase RLS | Enabled; transitional anon_all policies until Google OAuth replaces them |
 | Cross-ref sync fix | Visit and cross_refs sequenced in one fireAndForget block (prevents FK race condition) |
 | Supabase secrets | local.properties (gitignored) locally; two separate GitHub repo secrets for CI |
+| Default seeded users | None — removed; first admin inserted manually via Supabase SQL before first use |
+| SyncManager initialization | Eager — injected into DenticalApplication so ON_START observer fires before any Activity |
+| Login screen sync UX | LinearProgressIndicator + "Sync from server" TextButton; error message hints when sync still in progress |
+| Dynamic roles | roles + permissions tables; user↔role via user_role_cross_ref; permissions are union of all assigned roles |
+| Session persistence | DataStore (longPreferencesKey) in SessionManager; persists userId across app restarts |
+| Permission enforcement | PermissionChecker singleton reads CurrentUserProvider; canCreate/Read/Update/Delete per resource |
+| System roles | ADMIN/DENTIST/STAFF seeded in DB onCreate + MIGRATION_6_7; isSystem=true prevents deletion |
+| Role bootstrap on first sync | If Supabase roles table is empty, RoleRepository.pullFromSupabase() pushes local seeded roles up |
+| googleId on UserEntity | Nullable String column added; OAuth placeholder — no logic yet |
 
 ---
 
@@ -364,4 +411,4 @@ git push origin develop
 
 ---
 
-> Last updated: May 2026 — android/feature/supabase-integration: Supabase cloud sync (offline-first, write-on-mutation, full read sync on every app open via ProcessLifecycleOwner + manual sync button with 30-sec cooldown on every screen)
+> Last updated: May 2026 — merged android/feature/user-role-management → develop: dynamic RBAC complete (roles, permissions, user↔role cross-ref, session persistence, profile screen, user/role CRUD UI, SyncManager eager-init, login sync indicator)
