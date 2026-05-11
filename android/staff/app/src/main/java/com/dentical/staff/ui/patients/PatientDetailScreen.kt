@@ -645,38 +645,29 @@ fun OverviewTab(patient: PatientEntity, dateFormatter: SimpleDateFormat, onSched
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            OutlinedButton(onClick = onScheduleAppointment, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Schedule")
+            IconButton(onClick = onScheduleAppointment) {
+                Icon(Icons.Default.CalendarMonth, contentDescription = "Schedule appointment", tint = MaterialTheme.colorScheme.primary)
             }
             if (phone != null) {
-                OutlinedButton(
+                IconButton(
                     onClick = {
                         context.startActivity(
                             Intent(Intent.ACTION_DIAL, Uri.parse("tel:${PhoneUtil.formatForDialing(phone)}"))
                         )
-                    },
-                    modifier = Modifier.weight(1f)
+                    }
                 ) {
-                    Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Call")
+                    Icon(Icons.Default.Call, contentDescription = "Call", tint = MaterialTheme.colorScheme.secondary)
                 }
-                OutlinedButton(
+                IconButton(
                     onClick = {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse(PhoneUtil.whatsAppUrl(phone)))
                         )
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF25D366))
+                    }
                 ) {
-                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("WhatsApp")
+                    Icon(Icons.Default.Chat, contentDescription = "WhatsApp", tint = Color(0xFF25D366))
                 }
             }
         }
