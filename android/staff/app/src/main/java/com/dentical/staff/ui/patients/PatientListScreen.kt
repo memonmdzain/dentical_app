@@ -1,5 +1,7 @@
 package com.dentical.staff.ui.patients
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,10 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.dentical.staff.data.local.entities.PatientEntity
+import com.dentical.staff.util.PhoneUtil
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,6 +26,7 @@ fun PatientListScreen(
     onAddPatient: () -> Unit,
     onPatientClick: (Long) -> Unit,
     onBack: () -> Unit,
+    onScheduleAppointment: (Long) -> Unit,
     viewModel: PatientListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -115,7 +120,11 @@ fun PatientListScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(uiState.patients, key = { it.id }) { patient ->
-                        PatientCard(patient = patient, onClick = { onPatientClick(patient.id) })
+                        PatientCard(
+                            patient = patient,
+                            onClick = { onPatientClick(patient.id) },
+                            onSchedule = { onScheduleAppointment(patient.id) }
+                        )
                     }
                 }
             }
@@ -124,7 +133,10 @@ fun PatientListScreen(
 }
 
 @Composable
-fun PatientCard(patient: PatientEntity, onClick: () -> Unit) {
+fun PatientCard(patient: PatientEntity, onClick: () -> Unit, onSchedule: () -> Unit) {
+    val context = LocalContext.current
+    val phone = patient.phone?.takeIf { it.isNotBlank() }
+        ?: patient.guardianPhone?.takeIf { it.isNotBlank() }
     val age = remember(patient.dateOfBirth) {
         val dob = Calendar.getInstance().apply { timeInMillis = patient.dateOfBirth }
         val today = Calendar.getInstance()
@@ -137,53 +149,78 @@ fun PatientCard(patient: PatientEntity, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = patient.fullName.first().uppercase(),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(patient.fullName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold)
-                    if (age < 18) {
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Text("Minor",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 16.dp, end = 4.dp, bottom = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = patient.fullName.first().uppercase(),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-                Spacer(Modifier.height(2.dp))
-                Text("ID: ${patient.patientCode} · Age $age · ${patient.gender}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    patient.phone ?: patient.guardianPhone?.let { "Guardian: $it" } ?: "No phone",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(patient.fullName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        if (age < 18) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Text("Minor",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text("ID: ${patient.patientCode} · Age $age · ${patient.gender}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        patient.phone ?: patient.guardianPhone?.let { "Guardian: $it" } ?: "No phone",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = onSchedule) {
+                    Icon(Icons.Default.CalendarMonth, "Schedule appointment",
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+                if (phone != null) {
+                    IconButton(onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:${PhoneUtil.formatForDialing(phone)}"))
+                        )
+                    }) {
+                        Icon(Icons.Default.Call, "Call",
+                            tint = MaterialTheme.colorScheme.secondary)
+                    }
+                    IconButton(onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(PhoneUtil.whatsAppUrl(phone)))
+                        )
+                    }) {
+                        Icon(Icons.Default.Chat, "WhatsApp",
+                            tint = MaterialTheme.colorScheme.tertiary)
+                    }
+                }
+            }
         }
     }
 }

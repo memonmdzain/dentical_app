@@ -37,6 +37,7 @@ fun PatientDetailScreen(
     onAddVisit: () -> Unit,
     onEditVisit: (Long) -> Unit,
     onTreatmentClick: (Long) -> Unit,
+    onScheduleAppointment: () -> Unit,
     viewModel: PatientDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -224,7 +225,7 @@ fun PatientDetailScreen(
                 }
 
                 when (uiState.selectedTab) {
-                    0 -> OverviewTab(patient = patient, dateFormatter = dateFormatter)
+                    0 -> OverviewTab(patient = patient, dateFormatter = dateFormatter, onScheduleAppointment = onScheduleAppointment)
                     1 -> TreatmentsTab(
                         patient = patient,
                         treatments = uiState.treatments,
@@ -631,13 +632,48 @@ private fun formatCurrency(amount: Double): String {
 }
 
 @Composable
-fun OverviewTab(patient: PatientEntity, dateFormatter: SimpleDateFormat) {
+fun OverviewTab(patient: PatientEntity, dateFormatter: SimpleDateFormat, onScheduleAppointment: () -> Unit) {
+    val context = LocalContext.current
+    val phone = patient.phone?.takeIf { it.isNotBlank() }
+        ?: patient.guardianPhone?.takeIf { it.isNotBlank() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IconButton(onClick = onScheduleAppointment) {
+                Icon(Icons.Default.CalendarMonth, contentDescription = "Schedule appointment", tint = MaterialTheme.colorScheme.primary)
+            }
+            if (phone != null) {
+                IconButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:${PhoneUtil.formatForDialing(phone)}"))
+                        )
+                    }
+                ) {
+                    Icon(Icons.Default.Call, contentDescription = "Call", tint = MaterialTheme.colorScheme.secondary)
+                }
+                IconButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(PhoneUtil.whatsAppUrl(phone)))
+                        )
+                    }
+                ) {
+                    Icon(Icons.Default.Chat, contentDescription = "WhatsApp", tint = Color(0xFF25D366))
+                }
+            }
+        }
+
+        HorizontalDivider()
+
         DetailRow("Date of Birth", SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(patient.dateOfBirth)))
         if (patient.guardianName != null) DetailRow("Guardian", patient.guardianName)
         if (patient.guardianPhone != null) DetailRow("Guardian Phone", patient.guardianPhone)
