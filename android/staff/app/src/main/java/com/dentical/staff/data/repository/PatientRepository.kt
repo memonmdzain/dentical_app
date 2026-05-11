@@ -51,8 +51,18 @@ class PatientRepository @Inject constructor(
     suspend fun pullFromSupabase() {
         if (!sync.isConnected) return
         try {
-            val dtos = sync.supabase.from("patients").select().decodeList<PatientDto>()
-            patientDao.upsertAll(dtos.map { it.toEntity() })
+            val pageSize = 1000
+            var offset = 0L
+            val all = mutableListOf<PatientDto>()
+            while (true) {
+                val page = sync.supabase.from("patients").select {
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<PatientDto>()
+                all.addAll(page)
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+            patientDao.upsertAll(all.map { it.toEntity() })
         } catch (e: Exception) {
             Log.e("SupabaseSync", "Pull patients failed", e)
         }
