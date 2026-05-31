@@ -76,8 +76,18 @@ class AppointmentRepository @Inject constructor(
     suspend fun pullFromSupabase() {
         if (!sync.isConnected) return
         try {
-            val dtos = sync.supabase.from("appointments").select().decodeList<AppointmentDto>()
-            appointmentDao.upsertAll(dtos.map { it.toEntity() })
+            val pageSize = 1000
+            var offset = 0L
+            val all = mutableListOf<AppointmentDto>()
+            while (true) {
+                val page = sync.supabase.from("appointments").select {
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<AppointmentDto>()
+                all.addAll(page)
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+            appointmentDao.upsertAll(all.map { it.toEntity() })
         } catch (e: Exception) {
             Log.e("SupabaseSync", "Pull appointments failed", e)
         }

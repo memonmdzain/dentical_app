@@ -187,13 +187,43 @@ class TreatmentRepository @Inject constructor(
     suspend fun pullAll() {
         if (!sync.isConnected) return
         try {
-            val treatmentDtos = sync.supabase.from("treatments").select().decodeList<TreatmentDto>()
-            treatmentDao.upsertAll(treatmentDtos.map { it.toEntity() })
-            val visitDtos = sync.supabase.from("visits").select().decodeList<VisitDto>()
-            visitDao.upsertAll(visitDtos.map { it.toEntity() })
-            val crossRefDtos = sync.supabase.from("treatment_visit_cross_ref")
-                .select().decodeList<TreatmentVisitCrossRefDto>()
-            crossRefDao.upsertAll(crossRefDtos.map { it.toEntity() })
+            val pageSize = 1000
+
+            var offset = 0L
+            val treatments = mutableListOf<TreatmentDto>()
+            while (true) {
+                val page = sync.supabase.from("treatments").select {
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<TreatmentDto>()
+                treatments.addAll(page)
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+            treatmentDao.upsertAll(treatments.map { it.toEntity() })
+
+            offset = 0L
+            val visits = mutableListOf<VisitDto>()
+            while (true) {
+                val page = sync.supabase.from("visits").select {
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<VisitDto>()
+                visits.addAll(page)
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+            visitDao.upsertAll(visits.map { it.toEntity() })
+
+            offset = 0L
+            val crossRefs = mutableListOf<TreatmentVisitCrossRefDto>()
+            while (true) {
+                val page = sync.supabase.from("treatment_visit_cross_ref").select {
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<TreatmentVisitCrossRefDto>()
+                crossRefs.addAll(page)
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+            crossRefDao.upsertAll(crossRefs.map { it.toEntity() })
         } catch (e: Exception) {
             Log.e("SupabaseSync", "Pull all failed", e)
         }
