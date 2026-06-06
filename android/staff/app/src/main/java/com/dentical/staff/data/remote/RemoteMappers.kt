@@ -90,9 +90,10 @@ fun VisitEntity.toDto() = VisitDto(
 )
 
 fun TreatmentVisitCrossRef.toDto() = TreatmentVisitCrossRefDto(
-    treatmentId = treatmentId,
-    visitId     = visitId,
-    workDone    = workDone
+    treatmentId     = treatmentId,
+    visitId         = visitId,
+    workDone        = workDone,
+    allocatedAmount = allocatedAmount
 )
 
 // ── Reverse mappers: DTO → Room entity (used by pull-from-Supabase) ──────────
@@ -160,9 +161,10 @@ fun VisitDto.toEntity() = VisitEntity(
 )
 
 fun TreatmentVisitCrossRefDto.toEntity() = TreatmentVisitCrossRef(
-    treatmentId = treatmentId,
-    visitId     = visitId,
-    workDone    = workDone
+    treatmentId     = treatmentId,
+    visitId         = visitId,
+    workDone        = workDone,
+    allocatedAmount = allocatedAmount
 )
 
 // ── Role / Permission mappers ─────────────────────────────────────────────────

@@ -112,7 +112,8 @@ CREATE INDEX IF NOT EXISTS idx_visit_patient ON visits(patient_id);
 CREATE TABLE IF NOT EXISTS treatment_visit_cross_ref (
   treatment_id  bigint NOT NULL REFERENCES treatments(id) ON DELETE CASCADE,
   visit_id      bigint NOT NULL REFERENCES visits(id)     ON DELETE CASCADE,
-  work_done     text NOT NULL,
+  work_done        text NOT NULL,
+  allocated_amount double precision NOT NULL DEFAULT 0,
   PRIMARY KEY (treatment_id, visit_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tvcr_visit ON treatment_visit_cross_ref(visit_id);
@@ -175,3 +176,11 @@ CREATE POLICY "anon_all" ON invoices                  FOR ALL TO anon USING (tru
 --
 -- Future: when Google OAuth is added, drop the anon_all policies
 -- above and replace with auth.uid()-based row-level policies.
+
+
+-- ── Migrations ────────────────────────────────────────────────
+-- Run these in order when upgrading an existing database.
+
+-- Migration 001: Add allocated_amount to treatment_visit_cross_ref (Room DB v7→v8)
+-- ALTER TABLE treatment_visit_cross_ref
+--     ADD COLUMN allocated_amount DOUBLE PRECISION NOT NULL DEFAULT 0;

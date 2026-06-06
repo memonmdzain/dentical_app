@@ -96,7 +96,8 @@ data class VisitEntity(
 data class TreatmentVisitCrossRef(
     val treatmentId: Long,
     val visitId: Long,
-    val workDone: String
+    val workDone: String,
+    val allocatedAmount: Double = 0.0   // FIFO-allocated share of the visit's amountPaid
 )
 
 enum class InvoiceStatus {

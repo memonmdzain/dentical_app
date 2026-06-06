@@ -138,36 +138,72 @@ class TreatmentRepository @Inject constructor(
 
     suspend fun getVisitById(visitId: Long): VisitEntity? = visitDao.getVisitById(visitId)
 
-    suspend fun updateVisit(visit: VisitEntity) {
-        visitDao.updateVisit(visit)
-        sync.fireAndForget { sync.supabase.from("visits").upsert(visit.toDto()) }
-    }
-
     /**
-     * FIFO allocation: amountPaid on a visit is allocated to its linked treatments in
-     * startDate order (earliest first). Returns unpaid balance for the given treatment,
-     * or 0.0 if no quotedCost is set.
+     * Fast outstanding read: quotedCost minus the sum of stored allocatedAmount values.
+     * No runtime FIFO — allocations are written at addVisit / updateVisit time.
      */
     suspend fun calculateTreatmentOutstanding(treatmentId: Long): Double {
         val treatment = treatmentDao.getTreatmentById(treatmentId) ?: return 0.0
         val quotedCost = treatment.quotedCost ?: return 0.0
-        val visits = visitDao.getVisitsByTreatmentOnce(treatmentId)
-        var totalAllocated = 0.0
-        for (visit in visits) {
-            val visitCrossRefs = crossRefDao.getByVisitId(visit.id)
-            val visitTreatments = visitCrossRefs
-                .mapNotNull { treatmentDao.getTreatmentById(it.treatmentId) }
-                .sortedWith(compareBy({ it.startDate }, { it.id }))
-            var remaining = visit.amountPaid
-            for (t in visitTreatments) {
-                val cost = t.quotedCost ?: continue
-                val allocated = minOf(remaining, cost)
-                if (t.id == treatmentId) { totalAllocated += allocated; break }
-                remaining -= allocated
-                if (remaining <= 0.0) break
+        val totalAllocated = crossRefDao.getTotalAllocatedForTreatment(treatmentId)
+        return maxOf(0.0, quotedCost - totalAllocated)
+    }
+
+    /**
+     * Compute FIFO allocations for all treatments linked to [visitId] and persist them.
+     *
+     * Algorithm:
+     *   1. Load all treatments linked to this visit, sorted by startDate then id (oldest first).
+     *   2. Walk through them in order, filling each treatment's remaining balance
+     *      (quotedCost - already allocated from ALL prior visits) until the visit's
+     *      amountPaid is exhausted.
+     *   3. Write the allocation for each cross-ref back to Room and Supabase.
+     *
+     * This runs once at write time (addVisit / updateVisit), so reads are always O(1).
+     */
+    private suspend fun recomputeAllocationsForVisit(visitId: Long) {
+        val visit = visitDao.getVisitById(visitId) ?: return
+        val crossRefs = crossRefDao.getByVisitId(visitId)
+        if (crossRefs.isEmpty()) return
+
+        // Load linked treatments sorted by FIFO order
+        val treatments = crossRefs
+            .mapNotNull { treatmentDao.getTreatmentById(it.treatmentId) }
+            .sortedWith(compareBy({ it.startDate }, { it.id }))
+
+        var remaining = visit.amountPaid
+
+        val updatedCrossRefs = treatments.map { treatment ->
+            val crossRef = crossRefs.first { it.treatmentId == treatment.id }
+            val quotedCost = treatment.quotedCost
+
+            if (quotedCost == null || remaining <= 0.0) {
+                // No cost or nothing left to allocate
+                crossRef.copy(allocatedAmount = 0.0)
+            } else {
+                // How much has already been allocated to this treatment from OTHER visits
+                val alreadyAllocated = crossRefDao.getByTreatmentIdOnce(treatment.id)
+                    .filter { it.visitId != visitId }  // exclude the current visit being computed
+                    .sumOf { it.allocatedAmount }
+
+                val stillNeeded = maxOf(0.0, quotedCost - alreadyAllocated)
+                val allocation = minOf(remaining, stillNeeded)
+                remaining -= allocation
+                crossRef.copy(allocatedAmount = allocation)
             }
         }
-        return maxOf(0.0, quotedCost - totalAllocated)
+
+        // Persist updated cross-refs
+        db.withTransaction {
+            updatedCrossRefs.forEach { crossRefDao.insert(it) }
+        }
+
+        // Sync to Supabase
+        sync.fireAndForget {
+            updatedCrossRefs.forEach { ref ->
+                sync.supabase.from("treatment_visit_cross_ref").upsert(ref.toDto())
+            }
+        }
     }
 
     /**
@@ -261,14 +297,18 @@ class TreatmentRepository @Inject constructor(
             }
             id
         }
-        sync.fireAndForget {
-            sync.supabase.from("visits").upsert(visit.copy(id = visitId).toDto())
-            treatmentLinks.forEach { (treatmentId, workDone) ->
-                sync.supabase.from("treatment_visit_cross_ref").upsert(
-                    TreatmentVisitCrossRefDto(treatmentId, visitId, workDone)
-                )
-            }
-        }
+
+        // Compute and store FIFO allocations for this new visit
+        recomputeAllocationsForVisit(visitId)
+
         return visitId
+    }
+
+    suspend fun updateVisit(visit: VisitEntity) {
+        visitDao.updateVisit(visit)
+        sync.fireAndForget { sync.supabase.from("visits").upsert(visit.toDto()) }
+
+        // Recompute allocations since amountPaid may have changed
+        recomputeAllocationsForVisit(visit.id)
     }
 }

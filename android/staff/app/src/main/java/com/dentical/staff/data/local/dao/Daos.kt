@@ -316,6 +316,10 @@ interface TreatmentVisitCrossRefDao {
 
     @Query("DELETE FROM treatment_visit_cross_ref WHERE visitId = :visitId")
     suspend fun deleteByVisitId(visitId: Long)
+
+    /** Sum of all FIFO-allocated amounts for a treatment. Used for fast outstanding calculation. */
+    @Query("SELECT COALESCE(SUM(allocatedAmount), 0.0) FROM treatment_visit_cross_ref WHERE treatmentId = :treatmentId")
+    suspend fun getTotalAllocatedForTreatment(treatmentId: Long): Double
 }
 
 @Dao

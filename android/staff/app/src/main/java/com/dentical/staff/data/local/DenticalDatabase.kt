@@ -21,7 +21,7 @@ import com.dentical.staff.data.local.entities.*
         PermissionEntity::class,
         UserRoleCrossRef::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -344,6 +344,18 @@ abstract class DenticalDatabase : RoomDatabase() {
 
                 // Add googleId to users (placeholder for future OAuth)
                 db.execSQL("ALTER TABLE users ADD COLUMN googleId TEXT")
+            }
+        }
+
+        // Adds allocatedAmount to treatment_visit_cross_ref.
+        // Stores the FIFO-computed share of each visit's amountPaid allocated to each
+        // linked treatment. Replaces runtime FIFO recalculation on every screen load.
+        // Existing rows default to 0 — re-save each visit via Edit Visit to recompute.
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE treatment_visit_cross_ref ADD COLUMN allocatedAmount REAL NOT NULL DEFAULT 0"
+                )
             }
         }
     }
