@@ -17,6 +17,7 @@ import com.dentical.staff.data.remote.VisitDto
 import com.dentical.staff.data.remote.toDto
 import com.dentical.staff.data.remote.toEntity
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.util.Calendar
@@ -30,6 +31,12 @@ data class PatientFinancialSummary(
     val totalOutstanding: Double
 )
 
+data class RemoteTreatmentData(
+    val treatments: List<TreatmentEntity>,
+    val standaloneVisits: List<VisitEntity>,
+    val crossRefs: Map<Long, List<TreatmentVisitCrossRef>>
+)
+
 @Singleton
 class TreatmentRepository @Inject constructor(
     private val db: DenticalDatabase,
@@ -38,6 +45,8 @@ class TreatmentRepository @Inject constructor(
     private val crossRefDao: TreatmentVisitCrossRefDao,
     private val sync: SupabaseSyncHelper
 ) {
+    // ── Existing queries ───────────────────────────────────────────────────────
+
     fun getTreatmentsByPatient(patientId: Long): Flow<List<TreatmentEntity>> =
         treatmentDao.getTreatmentsByPatient(patientId)
 
@@ -68,6 +77,30 @@ class TreatmentRepository @Inject constructor(
     suspend fun getCrossRefsForVisit(visitId: Long): List<TreatmentVisitCrossRef> =
         crossRefDao.getByVisitId(visitId)
 
+    // ── Filtered Room queries ──────────────────────────────────────────────────
+
+    fun getTreatmentsByPatientFiltered(patientId: Long, fromMs: Long): Flow<List<TreatmentEntity>> =
+        treatmentDao.getTreatmentsByPatientFiltered(patientId, fromMs)
+
+    fun getStandaloneVisitsFiltered(patientId: Long, fromMs: Long): Flow<List<VisitEntity>> =
+        visitDao.getStandaloneVisitsFiltered(patientId, fromMs)
+
+    fun getPatientFinancialSummaryFiltered(patientId: Long, fromMs: Long): Flow<PatientFinancialSummary> =
+        combine(
+            treatmentDao.getTotalQuotedCostFiltered(patientId, fromMs),
+            visitDao.getTotalAmountPaidFiltered(patientId, fromMs),
+            visitDao.getStandaloneVisitsTotalChargedFiltered(patientId, fromMs)
+        ) { totalQuoted, totalPaid, standaloneCharged ->
+            PatientFinancialSummary(
+                totalQuoted = totalQuoted,
+                standaloneCharged = standaloneCharged,
+                totalPaid = totalPaid,
+                totalOutstanding = maxOf(0.0, (totalQuoted + standaloneCharged) - totalPaid)
+            )
+        }
+
+    // ── Unfiltered financial summary (Dashboard, global calcs) ────────────────
+
     fun getPatientFinancialSummary(patientId: Long): Flow<PatientFinancialSummary> = combine(
         treatmentDao.getTotalQuotedCost(patientId),
         visitDao.getTotalAmountPaid(patientId),
@@ -81,8 +114,7 @@ class TreatmentRepository @Inject constructor(
         )
     }
 
-    fun getOngoingTreatmentCount(): Flow<Int> =
-        treatmentDao.getOngoingTreatmentCount()
+    fun getOngoingTreatmentCount(): Flow<Int> = treatmentDao.getOngoingTreatmentCount()
 
     fun getPatientIdsWithOngoingTreatments(): Flow<List<Long>> =
         treatmentDao.getPatientIdsWithOngoingTreatments()
@@ -99,9 +131,7 @@ class TreatmentRepository @Inject constructor(
         treatmentDao.getTotalQuotedAll(),
         visitDao.getTotalPaidAll(),
         visitDao.getTotalStandaloneChargedAll()
-    ) { quoted, paid, standalone ->
-        maxOf(0.0, quoted + standalone - paid)
-    }
+    ) { quoted, paid, standalone -> maxOf(0.0, quoted + standalone - paid) }
 
     suspend fun computeOutstandingOnce(patientId: Long): Double {
         val quoted = treatmentDao.getTotalQuotedCostOnce(patientId)
@@ -109,6 +139,261 @@ class TreatmentRepository @Inject constructor(
         val standalone = visitDao.getStandaloneVisitsTotalChargedOnce(patientId)
         return maxOf(0.0, quoted + standalone - paid)
     }
+
+    // ── Supabase: fetch a page of treatments by patient with status+date filter ─
+
+    /**
+     * Fetches one page of treatments from Supabase matching:
+     *   status = 'ONGOING'  OR  start_date >= fromMs  (AND start_date <= toMs if provided)
+     *
+     * Uses two separate queries and merges, because nested OR+AND is unreliable across
+     * supabase-kt versions. Simple eq/gte/lte on each query is the safe approach.
+     */
+    private suspend fun fetchTreatmentPage(
+        patientId: Long?,
+        fromMs: Long,
+        toMs: Long?,
+        pageSize: Int
+    ): List<TreatmentDto> {
+        // Query 1: ONGOING treatments
+        var offset = 0L
+        val ongoing = mutableListOf<TreatmentDto>()
+        while (true) {
+            val page = sync.supabase.from("treatments").select {
+                filter {
+                    if (patientId != null) eq("patient_id", patientId)
+                    eq("status", "ONGOING")
+                }
+                range(offset, offset + pageSize - 1)
+            }.decodeList<TreatmentDto>()
+            ongoing.addAll(page)
+            if (page.size < pageSize) break
+            offset += pageSize
+        }
+
+        // Query 2: closed treatments within date range
+        offset = 0L
+        val closed = mutableListOf<TreatmentDto>()
+        while (true) {
+            val page = sync.supabase.from("treatments").select {
+                filter {
+                    if (patientId != null) eq("patient_id", patientId)
+                    filter("status", FilterOperator.NEQ, "ONGOING")
+                    gte("start_date", fromMs)
+                    if (toMs != null) lte("start_date", toMs)
+                }
+                range(offset, offset + pageSize - 1)
+            }.decodeList<TreatmentDto>()
+            closed.addAll(page)
+            if (page.size < pageSize) break
+            offset += pageSize
+        }
+
+        // Merge, dedup by id
+        val seen = mutableSetOf<Long>()
+        return (ongoing + closed).filter { seen.add(it.id) }
+    }
+
+    // ── Supabase: fetch visits and cross refs for a list of treatment IDs ──────
+
+    private suspend fun fetchVisitsAndCrossRefsForTreatments(
+        treatmentIds: List<Long>,
+        pageSize: Int
+    ): Pair<List<VisitEntity>, List<TreatmentVisitCrossRef>> {
+        if (treatmentIds.isEmpty()) return Pair(emptyList(), emptyList())
+
+        // Fetch cross refs per treatment (single eq per treatment — safe, proven to work)
+        val allCrossRefs = mutableListOf<TreatmentVisitCrossRef>()
+        val linkedVisitIds = mutableSetOf<Long>()
+        for (treatmentId in treatmentIds) {
+            var offset = 0L
+            while (true) {
+                val page = sync.supabase.from("treatment_visit_cross_ref").select {
+                    filter { eq("treatment_id", treatmentId) }
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<TreatmentVisitCrossRefDto>()
+                allCrossRefs.addAll(page.map { it.toEntity() })
+                page.forEach { linkedVisitIds.add(it.visitId) }
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+        }
+
+        // Fetch visits per visit ID (single eq per visit — safe)
+        val allVisits = mutableListOf<VisitEntity>()
+        for (visitId in linkedVisitIds) {
+            val page = sync.supabase.from("visits").select {
+                filter { eq("id", visitId) }
+            }.decodeList<VisitDto>()
+            allVisits.addAll(page.map { it.toEntity() })
+        }
+
+        return Pair(allVisits, allCrossRefs)
+    }
+
+    // ── Direct Supabase fetch for non-default filters ─────────────────────────
+
+    suspend fun fetchFromSupabase(patientId: Long, fromMs: Long, toMs: Long): RemoteTreatmentData {
+        val pageSize = 100
+
+        val treatments = fetchTreatmentPage(patientId, fromMs, toMs, pageSize)
+        val treatmentIds = treatments.map { it.id }
+
+        val (linkedVisits, crossRefs) = fetchVisitsAndCrossRefsForTreatments(treatmentIds, pageSize)
+
+        val linkedVisitIds = linkedVisits.map { it.id }.toSet()
+
+        // Standalone visits by date (visits not linked to any treatment)
+        val allVisitsInRange = mutableListOf<VisitDto>()
+        var offset = 0L
+        while (true) {
+            val page = sync.supabase.from("visits").select {
+                filter {
+                    eq("patient_id", patientId)
+                    gte("visit_date", fromMs)
+                    lte("visit_date", toMs)
+                }
+                range(offset, offset + pageSize - 1)
+            }.decodeList<VisitDto>()
+            allVisitsInRange.addAll(page)
+            if (page.size < pageSize) break
+            offset += pageSize
+        }
+        val standaloneVisits = allVisitsInRange
+            .filter { it.id !in linkedVisitIds }
+            .map { it.toEntity() }
+
+        // Build crossRef map keyed by visitId
+        val crossRefMap = crossRefs.groupBy { it.visitId }
+
+        return RemoteTreatmentData(
+            treatments = treatments.map { it.toEntity() },
+            standaloneVisits = standaloneVisits,
+            crossRefs = crossRefMap
+        )
+    }
+
+    // ── Supabase fallback for TreatmentDetailScreen ───────────────────────────
+
+    suspend fun fetchTreatmentFromSupabase(treatmentId: Long): TreatmentEntity? {
+        if (!sync.isConnected) return null
+        return try {
+            sync.supabase.from("treatments").select {
+                filter { eq("id", treatmentId) }
+            }.decodeList<TreatmentDto>().firstOrNull()?.toEntity()
+        } catch (e: Exception) {
+            Log.e("TreatmentRepository", "fetchTreatmentFromSupabase failed", e)
+            null
+        }
+    }
+
+    suspend fun fetchVisitsForTreatment(treatmentId: Long): Pair<List<VisitEntity>, List<TreatmentVisitCrossRef>> {
+        if (!sync.isConnected) return Pair(emptyList(), emptyList())
+        return try {
+            fetchVisitsAndCrossRefsForTreatments(listOf(treatmentId), 100)
+        } catch (e: Exception) {
+            Log.e("TreatmentRepository", "fetchVisitsForTreatment failed", e)
+            Pair(emptyList(), emptyList())
+        }
+    }
+
+    // ── Purge old data from Room ───────────────────────────────────────────────
+
+    suspend fun purgeOldDataForPatient(patientId: Long, cutoffMs: Long) {
+        try {
+            val oldTreatmentIds = treatmentDao.getOldClosedTreatmentIds(patientId, cutoffMs)
+            if (oldTreatmentIds.isNotEmpty()) {
+                db.withTransaction {
+                    crossRefDao.deleteByTreatmentIds(oldTreatmentIds)
+                    visitDao.deleteVisitsForTreatments(oldTreatmentIds)
+                    treatmentDao.deleteByIds(oldTreatmentIds)
+                }
+            }
+            val oldStandaloneIds = visitDao.getOldStandaloneVisitIds(patientId, cutoffMs)
+            if (oldStandaloneIds.isNotEmpty()) {
+                visitDao.deleteByIds(oldStandaloneIds)
+            }
+        } catch (e: Exception) {
+            Log.e("TreatmentRepository", "Purge failed for patient $patientId", e)
+        }
+    }
+
+    // ── Sync: pull from Supabase into Room ────────────────────────────────────
+
+    suspend fun pullAll() {
+        if (!sync.isConnected) return
+        try {
+            val cutoffMs = oneMonthAgoMs()
+            val pageSize = 100
+
+            // Treatments: ONGOING + closed within last 1 month
+            val treatments = fetchTreatmentPage(null, cutoffMs, null, pageSize)
+            treatmentDao.upsertAll(treatments.map { it.toEntity() })
+
+            // Linked visits (fetched by treatment ID — no date filter)
+            val (linkedVisits, crossRefs) = fetchVisitsAndCrossRefsForTreatments(
+                treatments.map { it.id }, pageSize
+            )
+            visitDao.upsertAll(linkedVisits)   // visits must be in Room before cross refs
+            crossRefDao.upsertAll(crossRefs)
+
+            // Standalone visits by date
+            val linkedVisitIds = linkedVisits.map { it.id }.toSet()
+            var offset = 0L
+            while (true) {
+                val page = sync.supabase.from("visits").select {
+                    filter { gte("visit_date", cutoffMs) }
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<VisitDto>()
+                val standalone = page.filter { it.id !in linkedVisitIds }
+                if (standalone.isNotEmpty()) visitDao.upsertAll(standalone.map { it.toEntity() })
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseSync", "Pull all failed", e)
+        }
+    }
+
+    suspend fun pullForPatient(patientId: Long) {
+        if (!sync.isConnected) return
+        try {
+            val cutoffMs = oneMonthAgoMs()
+            val pageSize = 100
+
+            // Treatments: ONGOING + closed within last 1 month for this patient
+            val treatments = fetchTreatmentPage(patientId, cutoffMs, null, pageSize)
+            treatmentDao.upsertAll(treatments.map { it.toEntity() })
+
+            // Linked visits (fetched by treatment ID — no date filter)
+            val (linkedVisits, crossRefs) = fetchVisitsAndCrossRefsForTreatments(
+                treatments.map { it.id }, pageSize
+            )
+            visitDao.upsertAll(linkedVisits)   // visits must be in Room before cross refs
+            crossRefDao.upsertAll(crossRefs)
+
+            // Standalone visits by date for this patient
+            val linkedVisitIds = linkedVisits.map { it.id }.toSet()
+            var offset = 0L
+            while (true) {
+                val page = sync.supabase.from("visits").select {
+                    filter {
+                        eq("patient_id", patientId)
+                        gte("visit_date", cutoffMs)
+                    }
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<VisitDto>()
+                val standalone = page.filter { it.id !in linkedVisitIds }
+                if (standalone.isNotEmpty()) visitDao.upsertAll(standalone.map { it.toEntity() })
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseSync", "Pull for patient $patientId failed", e)
+        }
+    }
+
+    // ── Mutations ─────────────────────────────────────────────────────────────
 
     suspend fun addTreatment(treatment: TreatmentEntity): Long {
         val id = treatmentDao.insertTreatment(treatment)
@@ -138,10 +423,6 @@ class TreatmentRepository @Inject constructor(
 
     suspend fun getVisitById(visitId: Long): VisitEntity? = visitDao.getVisitById(visitId)
 
-    /**
-     * Fast outstanding read: quotedCost minus the sum of stored allocatedAmount values.
-     * No runtime FIFO — allocations are written at addVisit / updateVisit time.
-     */
     suspend fun calculateTreatmentOutstanding(treatmentId: Long): Double {
         val treatment = treatmentDao.getTreatmentById(treatmentId) ?: return 0.0
         val quotedCost = treatment.quotedCost ?: return 0.0
@@ -149,24 +430,11 @@ class TreatmentRepository @Inject constructor(
         return maxOf(0.0, quotedCost - totalAllocated)
     }
 
-    /**
-     * Compute FIFO allocations for all treatments linked to [visitId] and persist them.
-     *
-     * Algorithm:
-     *   1. Load all treatments linked to this visit, sorted by startDate then id (oldest first).
-     *   2. Walk through them in order, filling each treatment's remaining balance
-     *      (quotedCost - already allocated from ALL prior visits) until the visit's
-     *      amountPaid is exhausted.
-     *   3. Write the allocation for each cross-ref back to Room and Supabase.
-     *
-     * This runs once at write time (addVisit / updateVisit), so reads are always O(1).
-     */
     private suspend fun recomputeAllocationsForVisit(visitId: Long) {
         val visit = visitDao.getVisitById(visitId) ?: return
         val crossRefs = crossRefDao.getByVisitId(visitId)
         if (crossRefs.isEmpty()) return
 
-        // Load linked treatments sorted by FIFO order
         val treatments = crossRefs
             .mapNotNull { treatmentDao.getTreatmentById(it.treatmentId) }
             .sortedWith(compareBy({ it.startDate }, { it.id }))
@@ -176,16 +444,12 @@ class TreatmentRepository @Inject constructor(
         val updatedCrossRefs = treatments.map { treatment ->
             val crossRef = crossRefs.first { it.treatmentId == treatment.id }
             val quotedCost = treatment.quotedCost
-
             if (quotedCost == null || remaining <= 0.0) {
-                // No cost or nothing left to allocate
                 crossRef.copy(allocatedAmount = 0.0)
             } else {
-                // How much has already been allocated to this treatment from OTHER visits
                 val alreadyAllocated = crossRefDao.getByTreatmentIdOnce(treatment.id)
-                    .filter { it.visitId != visitId }  // exclude the current visit being computed
+                    .filter { it.visitId != visitId }
                     .sumOf { it.allocatedAmount }
-
                 val stillNeeded = maxOf(0.0, quotedCost - alreadyAllocated)
                 val allocation = minOf(remaining, stillNeeded)
                 remaining -= allocation
@@ -193,12 +457,7 @@ class TreatmentRepository @Inject constructor(
             }
         }
 
-        // Persist updated cross-refs
-        db.withTransaction {
-            updatedCrossRefs.forEach { crossRefDao.insert(it) }
-        }
-
-        // Sync to Supabase
+        db.withTransaction { updatedCrossRefs.forEach { crossRefDao.insert(it) } }
         sync.fireAndForget {
             updatedCrossRefs.forEach { ref ->
                 sync.supabase.from("treatment_visit_cross_ref").upsert(ref.toDto())
@@ -206,10 +465,6 @@ class TreatmentRepository @Inject constructor(
         }
     }
 
-    /**
-     * Signed patient balance after cancelling [treatmentId] with [partialCharge] as the charge
-     * for work done so far. Negative = patient is owed a refund.
-     */
     suspend fun computeCancellationBalance(treatmentId: Long, partialCharge: Double): Double {
         val treatment = treatmentDao.getTreatmentById(treatmentId) ?: return 0.0
         val patientId = treatment.patientId
@@ -220,75 +475,6 @@ class TreatmentRepository @Inject constructor(
         return (totalQuoted - originalCost + partialCharge + standaloneCharged) - totalPaid
     }
 
-    suspend fun pullAll() {
-        if (!sync.isConnected) return
-        try {
-            val pageSize = 1000
-
-            var offset = 0L
-            val treatments = mutableListOf<TreatmentDto>()
-            while (true) {
-                val page = sync.supabase.from("treatments").select {
-                    range(offset, offset + pageSize - 1)
-                }.decodeList<TreatmentDto>()
-                treatments.addAll(page)
-                if (page.size < pageSize) break
-                offset += pageSize
-            }
-            treatmentDao.upsertAll(treatments.map { it.toEntity() })
-
-            offset = 0L
-            val visits = mutableListOf<VisitDto>()
-            while (true) {
-                val page = sync.supabase.from("visits").select {
-                    range(offset, offset + pageSize - 1)
-                }.decodeList<VisitDto>()
-                visits.addAll(page)
-                if (page.size < pageSize) break
-                offset += pageSize
-            }
-            visitDao.upsertAll(visits.map { it.toEntity() })
-
-            offset = 0L
-            val crossRefs = mutableListOf<TreatmentVisitCrossRefDto>()
-            while (true) {
-                val page = sync.supabase.from("treatment_visit_cross_ref").select {
-                    range(offset, offset + pageSize - 1)
-                }.decodeList<TreatmentVisitCrossRefDto>()
-                crossRefs.addAll(page)
-                if (page.size < pageSize) break
-                offset += pageSize
-            }
-            crossRefDao.upsertAll(crossRefs.map { it.toEntity() })
-        } catch (e: Exception) {
-            Log.e("SupabaseSync", "Pull all failed", e)
-        }
-    }
-
-    suspend fun pullForPatient(patientId: Long) {
-        if (!sync.isConnected) return
-        try {
-            val treatmentDtos = sync.supabase.from("treatments").select {
-                filter { eq("patient_id", patientId) }
-            }.decodeList<TreatmentDto>()
-            treatmentDao.upsertAll(treatmentDtos.map { it.toEntity() })
-
-            val visitDtos = sync.supabase.from("visits").select {
-                filter { eq("patient_id", patientId) }
-            }.decodeList<VisitDto>()
-            visitDao.upsertAll(visitDtos.map { it.toEntity() })
-
-            treatmentDtos.forEach { treatment ->
-                val crossRefDtos = sync.supabase.from("treatment_visit_cross_ref").select {
-                    filter { eq("treatment_id", treatment.id) }
-                }.decodeList<TreatmentVisitCrossRefDto>()
-                crossRefDao.upsertAll(crossRefDtos.map { it.toEntity() })
-            }
-        } catch (e: Exception) {
-            Log.e("SupabaseSync", "Pull for patient $patientId failed", e)
-        }
-    }
-
     suspend fun addVisit(visit: VisitEntity, treatmentLinks: List<Pair<Long, String>>): Long {
         val visitId = db.withTransaction {
             val id = visitDao.insertVisit(visit)
@@ -297,18 +483,25 @@ class TreatmentRepository @Inject constructor(
             }
             id
         }
-
-        // Compute and store FIFO allocations for this new visit
         recomputeAllocationsForVisit(visitId)
-
         return visitId
     }
 
     suspend fun updateVisit(visit: VisitEntity) {
         visitDao.updateVisit(visit)
         sync.fireAndForget { sync.supabase.from("visits").upsert(visit.toDto()) }
-
-        // Recompute allocations since amountPaid may have changed
         recomputeAllocationsForVisit(visit.id)
+    }
+
+    companion object {
+        fun oneMonthAgoMs(): Long {
+            val cal = Calendar.getInstance()
+            cal.add(Calendar.MONTH, -1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            return cal.timeInMillis
+        }
     }
 }

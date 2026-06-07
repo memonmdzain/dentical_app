@@ -188,8 +188,21 @@ interface AppointmentDao {
 
 @Dao
 interface TreatmentDao {
+    // Legacy — keep for internal use (financial calcs, status updates, etc.)
     @Query("SELECT * FROM treatments WHERE patientId = :patientId ORDER BY startDate DESC")
     fun getTreatmentsByPatient(patientId: Long): Flow<List<TreatmentEntity>>
+
+    /**
+     * Filtered query for PatientDetailScreen.
+     * Always includes ONGOING treatments; applies date filter only to closed treatments.
+     */
+    @Query("""
+        SELECT * FROM treatments
+        WHERE patientId = :patientId
+          AND (status = 'ONGOING' OR startDate >= :fromMs)
+        ORDER BY startDate DESC
+    """)
+    fun getTreatmentsByPatientFiltered(patientId: Long, fromMs: Long): Flow<List<TreatmentEntity>>
 
     @Query("SELECT * FROM treatments WHERE patientId = :patientId AND status = 'ONGOING' ORDER BY startDate DESC")
     fun getOngoingTreatmentsByPatient(patientId: Long): Flow<List<TreatmentEntity>>
@@ -202,6 +215,20 @@ interface TreatmentDao {
 
     @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId")
     suspend fun getTotalQuotedCostOnce(patientId: Long): Double
+
+    /**
+     * Financial summary filtered — matches what is shown on screen.
+     * Always includes ONGOING; applies date filter to closed treatments.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments
+        WHERE patientId = :patientId
+          AND (status = 'ONGOING' OR startDate >= :fromMs)
+    """)
+    fun getTotalQuotedCostFiltered(patientId: Long, fromMs: Long): Flow<Double>
+
+    @Query("SELECT COALESCE(SUM(quotedCost), 0.0) FROM treatments WHERE patientId = :patientId AND (status = 'ONGOING' OR startDate >= :fromMs)")
+    suspend fun getTotalQuotedCostFilteredOnce(patientId: Long, fromMs: Long): Double
 
     @Query("SELECT COUNT(*) FROM treatments WHERE status = 'ONGOING'")
     fun getOngoingTreatmentCount(): Flow<Int>
@@ -223,12 +250,38 @@ interface TreatmentDao {
 
     @Delete
     suspend fun deleteTreatment(treatment: TreatmentEntity)
+
+    // ── Purge queries ──────────────────────────────────────────────────────────
+
+    /** IDs of closed treatments older than [cutoffMs] — used to cascade-delete visits and cross refs. */
+    @Query("""
+        SELECT id FROM treatments
+        WHERE patientId = :patientId
+          AND status != 'ONGOING'
+          AND startDate < :cutoffMs
+    """)
+    suspend fun getOldClosedTreatmentIds(patientId: Long, cutoffMs: Long): List<Long>
+
+    @Query("DELETE FROM treatments WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
 }
 
 @Dao
 interface VisitDao {
     @Query("SELECT * FROM visits WHERE patientId = :patientId ORDER BY visitDate DESC")
     fun getVisitsByPatient(patientId: Long): Flow<List<VisitEntity>>
+
+    /**
+     * Filtered standalone visits — excludes visits linked to a treatment, applies date filter.
+     */
+    @Query("""
+        SELECT * FROM visits
+        WHERE patientId = :patientId
+          AND visitDate >= :fromMs
+          AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
+        ORDER BY visitDate DESC
+    """)
+    fun getStandaloneVisitsFiltered(patientId: Long, fromMs: Long): Flow<List<VisitEntity>>
 
     @Query("""
         SELECT v.* FROM visits v
@@ -255,6 +308,29 @@ interface VisitDao {
     @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM visits WHERE patientId = :patientId")
     suspend fun getTotalAmountPaidOnce(patientId: Long): Double
 
+    /**
+     * Total amount paid — filtered to match what is shown on screen.
+     * Includes payments from visits linked to visible treatments (ONGOING or startDate >= fromMs)
+     * plus standalone visits in the same date range.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(v.amountPaid), 0.0) FROM visits v
+        WHERE v.patientId = :patientId
+          AND (
+            v.id IN (
+              SELECT tvr.visitId FROM treatment_visit_cross_ref tvr
+              INNER JOIN treatments t ON tvr.treatmentId = t.id
+              WHERE t.patientId = :patientId
+                AND (t.status = 'ONGOING' OR t.startDate >= :fromMs)
+            )
+            OR (
+              v.id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
+              AND v.visitDate >= :fromMs
+            )
+          )
+    """)
+    fun getTotalAmountPaidFiltered(patientId: Long, fromMs: Long): Flow<Double>
+
     @Query("""
         SELECT COALESCE(SUM(costCharged), 0.0) FROM visits
         WHERE patientId = :patientId
@@ -268,6 +344,15 @@ interface VisitDao {
         AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
     """)
     suspend fun getStandaloneVisitsTotalChargedOnce(patientId: Long): Double
+
+    /** Standalone visits charged — filtered to match what is shown on screen. */
+    @Query("""
+        SELECT COALESCE(SUM(costCharged), 0.0) FROM visits
+        WHERE patientId = :patientId
+          AND visitDate >= :fromMs
+          AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
+    """)
+    fun getStandaloneVisitsTotalChargedFiltered(patientId: Long, fromMs: Long): Flow<Double>
 
     @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM visits WHERE visitDate >= :startOfDay AND visitDate < :endOfDay")
     fun getTodaysCollections(startOfDay: Long, endOfDay: Long): Flow<Double>
@@ -289,6 +374,28 @@ interface VisitDao {
 
     @Delete
     suspend fun deleteVisit(visit: VisitEntity)
+
+    // ── Purge queries ──────────────────────────────────────────────────────────
+
+    /** Standalone visit IDs older than [cutoffMs] for a patient — for purge. */
+    @Query("""
+        SELECT id FROM visits
+        WHERE patientId = :patientId
+          AND visitDate < :cutoffMs
+          AND id NOT IN (SELECT DISTINCT visitId FROM treatment_visit_cross_ref)
+    """)
+    suspend fun getOldStandaloneVisitIds(patientId: Long, cutoffMs: Long): List<Long>
+
+    /** Delete visits linked to the given treatment IDs (cross-ref visits). */
+    @Query("""
+        DELETE FROM visits WHERE id IN (
+            SELECT visitId FROM treatment_visit_cross_ref WHERE treatmentId IN (:treatmentIds)
+        )
+    """)
+    suspend fun deleteVisitsForTreatments(treatmentIds: List<Long>)
+
+    @Query("DELETE FROM visits WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
 }
 
 @Dao
@@ -320,6 +427,11 @@ interface TreatmentVisitCrossRefDao {
     /** Sum of all FIFO-allocated amounts for a treatment. Used for fast outstanding calculation. */
     @Query("SELECT COALESCE(SUM(allocatedAmount), 0.0) FROM treatment_visit_cross_ref WHERE treatmentId = :treatmentId")
     suspend fun getTotalAllocatedForTreatment(treatmentId: Long): Double
+
+    // ── Purge queries ──────────────────────────────────────────────────────────
+
+    @Query("DELETE FROM treatment_visit_cross_ref WHERE treatmentId IN (:treatmentIds)")
+    suspend fun deleteByTreatmentIds(treatmentIds: List<Long>)
 }
 
 @Dao
