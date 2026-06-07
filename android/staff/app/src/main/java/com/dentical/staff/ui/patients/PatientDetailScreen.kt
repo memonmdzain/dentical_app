@@ -2,9 +2,11 @@ package com.dentical.staff.ui.patients
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -148,7 +150,6 @@ fun PatientDetailScreen(
                             }
                         }
 
-                        // Outstanding balance row
                         if (outstanding > 0) {
                             Spacer(Modifier.height(12.dp))
                             HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
@@ -229,11 +230,15 @@ fun PatientDetailScreen(
                     1 -> TreatmentsTab(
                         patient = patient,
                         treatments = uiState.treatments,
-                        standaloneVisits = uiState.visits.filter {
-                            uiState.visitCrossRefs[it.id].isNullOrEmpty()
-                        },
+                        standaloneVisits = uiState.standaloneVisits,
                         treatmentOutstandings = uiState.treatmentOutstandings,
                         financialSummary = uiState.financialSummary,
+                        selectedFilter = uiState.selectedFilter,
+                        customFromMs = uiState.customFromMs,
+                        customToMs = uiState.customToMs,
+                        isFilterLoading = uiState.isFilterLoading,
+                        filterError = uiState.filterError,
+                        onFilterSelected = { filter, from, to -> viewModel.onFilterSelected(filter, from, to) },
                         onAddTreatment = onAddTreatment,
                         onAddVisit = onAddVisit,
                         onEditVisit = onEditVisit,
@@ -246,6 +251,7 @@ fun PatientDetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TreatmentsTab(
     patient: PatientEntity,
@@ -253,6 +259,12 @@ fun TreatmentsTab(
     standaloneVisits: List<VisitEntity>,
     treatmentOutstandings: Map<Long, Double>,
     financialSummary: PatientFinancialSummary,
+    selectedFilter: TreatmentDateFilter,
+    customFromMs: Long,
+    customToMs: Long,
+    isFilterLoading: Boolean,
+    filterError: String?,
+    onFilterSelected: (TreatmentDateFilter, Long?, Long?) -> Unit,
     onAddTreatment: () -> Unit,
     onAddVisit: () -> Unit,
     onEditVisit: (Long) -> Unit,
@@ -262,13 +274,34 @@ fun TreatmentsTab(
     val dateFormatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val phone = patient.phone ?: patient.guardianPhone
 
+    // Custom date picker dialog state
+    var showCustomPicker by remember { mutableStateOf(false) }
+
+    if (showCustomPicker) {
+        CustomDateRangePickerDialog(
+            initialFromMs = customFromMs,
+            initialToMs = customToMs,
+            onConfirm = { from, to ->
+                showCustomPicker = false
+                onFilterSelected(TreatmentDateFilter.CUSTOM, from, to)
+            },
+            onDismiss = {
+                showCustomPicker = false
+                // If user cancels without confirming, revert chip selection to previous if needed
+                if (selectedFilter == TreatmentDateFilter.CUSTOM) {
+                    // Keep custom selected, just dismiss
+                }
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Financial summary card
-        if (treatments.isNotEmpty()) {
+        if (treatments.isNotEmpty() || standaloneVisits.isNotEmpty()) {
             item {
                 FinancialSummaryCard(
                     financialSummary = financialSummary,
@@ -298,7 +331,7 @@ fun TreatmentsTab(
             }
         }
 
-        // Ongoing treatments section
+        // Ongoing treatments section — no filter applied
         val ongoingTreatments = treatments.filter { it.status == TreatmentStatus.ONGOING }
         if (ongoingTreatments.isNotEmpty()) {
             item { SectionHeader("Ongoing Treatments (${ongoingTreatments.size})", modifier = Modifier.padding(top = 4.dp)) }
@@ -309,6 +342,60 @@ fun TreatmentsTab(
                     outstanding = treatmentOutstandings[treatment.id],
                     onClick = { onTreatmentClick(treatment.id) }
                 )
+            }
+        }
+
+        // ── Date filter row + Past Treatments ─────────────────────────────────
+        item {
+            TreatmentDateFilterRow(
+                selectedFilter = selectedFilter,
+                customFromMs = customFromMs,
+                customToMs = customToMs,
+                onFilterSelected = { filter ->
+                    if (filter == TreatmentDateFilter.CUSTOM) {
+                        showCustomPicker = true
+                    } else {
+                        onFilterSelected(filter, null, null)
+                    }
+                },
+                modifier = Modifier.padding(top = if (ongoingTreatments.isNotEmpty()) 4.dp else 0.dp)
+            )
+        }
+
+        // Filter error message
+        filterError?.let { error ->
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.WifiOff,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        // Filter loading indicator
+        if (isFilterLoading) {
+            item {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
             }
         }
 
@@ -334,8 +421,25 @@ fun TreatmentsTab(
             }
         }
 
-        // Empty state
-        if (treatments.isEmpty() && standaloneVisits.isEmpty()) {
+        // Empty state for filtered sections
+        if (pastTreatments.isEmpty() && standaloneVisits.isEmpty() && filterError == null && !isFilterLoading) {
+            item {
+                Text(
+                    text = when (selectedFilter) {
+                        TreatmentDateFilter.LAST_1M -> "No past treatments in the last month."
+                        TreatmentDateFilter.LAST_6M -> "No past treatments in the last 6 months."
+                        TreatmentDateFilter.LAST_12M -> "No past treatments in the last 12 months."
+                        TreatmentDateFilter.CUSTOM -> "No past treatments in the selected date range."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+
+        // Full empty state (no ongoing AND no past)
+        if (treatments.isEmpty() && standaloneVisits.isEmpty() && ongoingTreatments.isEmpty() && filterError == null && !isFilterLoading) {
             item {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
@@ -345,6 +449,129 @@ fun TreatmentsTab(
                         color = MaterialTheme.colorScheme.outline)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Horizontally scrollable filter chip row.
+ * Shows 4 options: 1M (default), 6M, 12M, Custom.
+ * Custom chip also shows the selected date range when active.
+ */
+@Composable
+private fun TreatmentDateFilterRow(
+    selectedFilter: TreatmentDateFilter,
+    customFromMs: Long,
+    customToMs: Long,
+    onFilterSelected: (TreatmentDateFilter) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shortDateFmt = remember { SimpleDateFormat("dd MMM yy", Locale.getDefault()) }
+
+    val customLabel = if (selectedFilter == TreatmentDateFilter.CUSTOM) {
+        "${shortDateFmt.format(Date(customFromMs))} – ${shortDateFmt.format(Date(customToMs))}"
+    } else {
+        "Custom"
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "History:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        FilterChip(
+            selected = selectedFilter == TreatmentDateFilter.LAST_1M,
+            onClick = { onFilterSelected(TreatmentDateFilter.LAST_1M) },
+            label = { Text("1 Month") }
+        )
+        FilterChip(
+            selected = selectedFilter == TreatmentDateFilter.LAST_6M,
+            onClick = { onFilterSelected(TreatmentDateFilter.LAST_6M) },
+            label = { Text("6 Months") }
+        )
+        FilterChip(
+            selected = selectedFilter == TreatmentDateFilter.LAST_12M,
+            onClick = { onFilterSelected(TreatmentDateFilter.LAST_12M) },
+            label = { Text("12 Months") }
+        )
+        FilterChip(
+            selected = selectedFilter == TreatmentDateFilter.CUSTOM,
+            onClick = { onFilterSelected(TreatmentDateFilter.CUSTOM) },
+            label = { Text(customLabel) },
+            leadingIcon = if (selectedFilter == TreatmentDateFilter.CUSTOM) null else {
+                { Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp)) }
+            }
+        )
+    }
+}
+
+/**
+ * Simple custom date range dialog using two DatePicker dialogs in sequence.
+ * First picks "from" date, then "to" date.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CustomDateRangePickerDialog(
+    initialFromMs: Long,
+    initialToMs: Long,
+    onConfirm: (Long, Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pickingTo by remember { mutableStateOf(false) }
+    var fromMs by remember { mutableStateOf(initialFromMs) }
+
+    val fromPickerState = rememberDatePickerState(initialSelectedDateMillis = initialFromMs)
+    val toPickerState = rememberDatePickerState(initialSelectedDateMillis = initialToMs)
+
+    if (!pickingTo) {
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(onClick = {
+                    fromMs = fromPickerState.selectedDateMillis ?: initialFromMs
+                    pickingTo = true
+                }) { Text("Next") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(
+                state = fromPickerState,
+                title = { Text("From date", modifier = Modifier.padding(start = 24.dp, top = 16.dp)) },
+                showModeToggle = false
+            )
+        }
+    } else {
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(onClick = {
+                    val toMs = toPickerState.selectedDateMillis ?: initialToMs
+                    // Ensure to >= from
+                    if (toMs >= fromMs) {
+                        onConfirm(fromMs, toMs)
+                    } else {
+                        onConfirm(toMs, fromMs) // swap if user picked backwards
+                    }
+                }) { Text("Apply") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pickingTo = false }) { Text("Back") }
+            }
+        ) {
+            DatePicker(
+                state = toPickerState,
+                title = { Text("To date", modifier = Modifier.padding(start = 24.dp, top = 16.dp)) },
+                showModeToggle = false
+            )
         }
     }
 }

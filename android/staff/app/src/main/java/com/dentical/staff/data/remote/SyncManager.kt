@@ -3,6 +3,7 @@ package com.dentical.staff.data.remote
 import android.util.Log
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.dentical.staff.data.local.dao.PatientDao
 import com.dentical.staff.data.repository.AppointmentRepository
 import com.dentical.staff.data.repository.PatientRepository
 import com.dentical.staff.data.repository.RoleRepository
@@ -14,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +27,7 @@ class SyncManager @Inject constructor(
     private val patientRepository: PatientRepository,
     private val appointmentRepository: AppointmentRepository,
     private val treatmentRepository: TreatmentRepository,
+    private val patientDao: PatientDao,
     @ApplicationScope private val scope: CoroutineScope
 ) {
     private val _isSyncing = MutableStateFlow(false)
@@ -36,7 +39,10 @@ class SyncManager @Inject constructor(
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
-                if (event == androidx.lifecycle.Lifecycle.Event.ON_START) forceSync()
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_START) {
+                    forceSync()
+                    purgeOldData()
+                }
             }
         )
     }
@@ -59,6 +65,25 @@ class SyncManager @Inject constructor(
             }
             delay(30_000L)
             _canSync.value = true
+        }
+    }
+
+    /**
+     * Quietly purges closed treatments, their visits, cross refs, and standalone visits
+     * older than 1 month from Room for every patient.
+     * Runs in background — failures are logged silently.
+     */
+    private fun purgeOldData() {
+        scope.launch {
+            try {
+                val cutoffMs = TreatmentRepository.oneMonthAgoMs()
+                val patients = patientDao.getAllPatients().first()
+                patients.forEach { patient ->
+                    treatmentRepository.purgeOldDataForPatient(patient.id, cutoffMs)
+                }
+            } catch (e: Exception) {
+                Log.e("SyncManager", "Purge failed", e)
+            }
         }
     }
 
