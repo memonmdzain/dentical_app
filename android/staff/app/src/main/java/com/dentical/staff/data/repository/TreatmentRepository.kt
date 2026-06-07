@@ -334,8 +334,8 @@ class TreatmentRepository @Inject constructor(
             val (linkedVisits, crossRefs) = fetchVisitsAndCrossRefsForTreatments(
                 treatments.map { it.id }, pageSize
             )
+            visitDao.upsertAll(linkedVisits)   // visits must be in Room before cross refs
             crossRefDao.upsertAll(crossRefs)
-            visitDao.upsertAll(linkedVisits)
 
             // Standalone visits by date
             val linkedVisitIds = linkedVisits.map { it.id }.toSet()
@@ -369,8 +369,8 @@ class TreatmentRepository @Inject constructor(
             val (linkedVisits, crossRefs) = fetchVisitsAndCrossRefsForTreatments(
                 treatments.map { it.id }, pageSize
             )
+            visitDao.upsertAll(linkedVisits)   // visits must be in Room before cross refs
             crossRefDao.upsertAll(crossRefs)
-            visitDao.upsertAll(linkedVisits)
 
             // Standalone visits by date for this patient
             val linkedVisitIds = linkedVisits.map { it.id }.toSet()
