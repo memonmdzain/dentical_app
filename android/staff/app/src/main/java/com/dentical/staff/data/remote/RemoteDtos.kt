@@ -109,9 +109,10 @@ data class VisitDto(
 
 @Serializable
 data class TreatmentVisitCrossRefDto(
-    @SerialName("treatment_id") val treatmentId: Long,
-    @SerialName("visit_id")     val visitId: Long,
-    @SerialName("work_done")    val workDone: String
+    @SerialName("treatment_id")      val treatmentId: Long,
+    @SerialName("visit_id")          val visitId: Long,
+    @SerialName("work_done")         val workDone: String,
+    @SerialName("allocated_amount")  val allocatedAmount: Double = 0.0
 )
 
 @Serializable

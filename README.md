@@ -66,7 +66,7 @@ Internal app for clinic staff. Distributed as private APK.
 - **Dashboard**: ongoing treatments count, today's collections, total outstanding — each stat tappable to a drill-down patient list with Schedule / Call / WhatsApp actions
 - **Appointments**: list view, calendar (day/week/month), add, edit, detail with status management
 - **Patients**: records with financial summary (Total Billed / Paid / Outstanding)
-- **Treatments**: add, edit, ongoing/past sections, standalone visits section, FIFO payment allocation
+- **Treatments**: add, edit, ongoing/past sections, standalone visits section, FIFO payment allocation (stored at write time per cross-ref; outstanding is a fast read, no runtime recalculation)
 - **Visits**: add (Cash/GPay/Bank Transfer), edit; overpayment blocked at entry
 - **Treatment detail**: full visit history, per-visit edit, mark complete (payment gate), cancel (partial charge + refund), reopen
 - **Settings** (Admin only): user management (create/edit staff accounts, assign roles), role management (custom roles with per-resource C/R/U/D permissions), profile & password change

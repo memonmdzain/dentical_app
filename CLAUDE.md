@@ -200,7 +200,7 @@ System roles (ADMIN/DENTIST/STAFF) and their permissions are still seeded locall
 
 ## Database
 
-- Version: 7, exportSchema: false
+- Version: 8, exportSchema: false
 - `fallbackToDestructiveMigration()` enabled — wipes DB if no migration path found (dev phase only; remove before launch)
 - Migration 1→2: patients table rebuilt
 - Migration 2→3: appointments table rebuilt with type + dentistId
@@ -208,6 +208,7 @@ System roles (ADMIN/DENTIST/STAFF) and their permissions are still seeded locall
 - Migration 4→5: tables recreated without SQL DEFAULT clauses (Room schema fix) + paymentMode column on visits
 - Migration 5→6: force clean slate for any device with a broken version-5 schema (same drop+recreate)
 - Migration 6→7: roles + permissions + user_role_cross_ref tables added; googleId column added to users; legacy role text column backfilled into cross-refs
+- Migration 7→8: allocatedAmount REAL NOT NULL DEFAULT 0 added to treatment_visit_cross_ref; enables FIFO allocation stored at write time
 
 ---
 
@@ -346,6 +347,8 @@ All screens have a Sync button (TopAppBar) tied to the shared `SyncManager`.
 | Reopen treatment | Yes — works for both Completed and Cancelled |
 | Payment gate on Mark Complete | Yes — FIFO allocation across linked treatments; blocks if outstanding > ₹0 |
 | FIFO payment allocation | Allocate visit payment to treatments sorted by startDate, then id |
+| FIFO allocation storage | allocatedAmount stored on TreatmentVisitCrossRef at addVisit/updateVisit time; calculateTreatmentOutstanding reads SUM(allocatedAmount) — no runtime FIFO on reads |
+| Supabase schema migrations | Documented inline at bottom of android/staff/supabase_schema.sql under Migrations section |
 | Visits shown only in Treatment Detail | Yes — removed from PatientDetail TreatmentsTab |
 | Standalone visits in PatientDetail | Yes — shown in a dedicated section in the Treatments tab |
 | Add Visit overpayment prevention | Yes — amountPaid blocked if it exceeds remaining outstanding across linked treatments |
@@ -411,4 +414,5 @@ git push origin develop
 
 ---
 
-> Last updated: May 2026 — merged android/feature/user-role-management → develop: dynamic RBAC complete (roles, permissions, user↔role cross-ref, session persistence, profile screen, user/role CRUD UI, SyncManager eager-init, login sync indicator)
+> Last updated: June 2026 — merged android/feature/user-role-management → develop: dynamic RBAC complete (roles, permissions, user↔role cross-ref, session persistence, profile screen, user/role CRUD UI, SyncManager eager-init, login sync indicator)
+> Fixed android/fix/fifo-allocated-amount → develop: per-treatment outstanding bug fixed by storing FIFO allocatedAmount on TreatmentVisitCrossRef at write time (DB migration 7→8)
