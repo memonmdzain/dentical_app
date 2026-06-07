@@ -246,6 +246,70 @@ class TreatmentRepository @Inject constructor(
         )
     }
 
+    /**
+     * Fetches a single treatment directly from Supabase.
+     * Used when the treatment is not in Room (e.g. purged old closed treatment).
+     * Returns null if not found or offline.
+     */
+    suspend fun fetchTreatmentFromSupabase(treatmentId: Long): TreatmentEntity? {
+        if (!sync.isConnected) return null
+        return try {
+            sync.supabase.from("treatments").select {
+                filter { eq("id", treatmentId) }
+            }.decodeList<TreatmentDto>().firstOrNull()?.toEntity()
+        } catch (e: Exception) {
+            Log.e("TreatmentRepository", "fetchTreatmentFromSupabase failed", e)
+            null
+        }
+    }
+
+    /**
+     * Fetches visits and cross refs for a treatment directly from Supabase.
+     * Used when the treatment is not in Room.
+     * Returns Pair(visits, crossRefs).
+     */
+    suspend fun fetchVisitsForTreatment(treatmentId: Long): Pair<List<VisitEntity>, List<TreatmentVisitCrossRef>> {
+        if (!sync.isConnected) return Pair(emptyList(), emptyList())
+        return try {
+            val pageSize = 100
+
+            // Fetch cross refs for this treatment
+            var offset = 0L
+            val crossRefDtos = mutableListOf<TreatmentVisitCrossRefDto>()
+            while (true) {
+                val page = sync.supabase.from("treatment_visit_cross_ref").select {
+                    filter { eq("treatment_id", treatmentId) }
+                    range(offset, offset + pageSize - 1)
+                }.decodeList<TreatmentVisitCrossRefDto>()
+                crossRefDtos.addAll(page)
+                if (page.size < pageSize) break
+                offset += pageSize
+            }
+
+            val visitIds = crossRefDtos.map { it.visitId }
+            val visits = mutableListOf<VisitEntity>()
+            if (visitIds.isNotEmpty()) {
+                visitIds.chunked(50).forEach { chunk ->
+                    offset = 0L
+                    while (true) {
+                        val page = sync.supabase.from("visits").select {
+                            filter { isIn("id", chunk) }
+                            range(offset, offset + pageSize - 1)
+                        }.decodeList<VisitDto>()
+                        visits.addAll(page.map { it.toEntity() })
+                        if (page.size < pageSize) break
+                        offset += pageSize
+                    }
+                }
+            }
+
+            Pair(visits, crossRefDtos.map { it.toEntity() })
+        } catch (e: Exception) {
+            Log.e("TreatmentRepository", "fetchVisitsForTreatment failed", e)
+            Pair(emptyList(), emptyList())
+        }
+    }
+
     // ── Purge old data from Room ───────────────────────────────────────────────
 
     suspend fun purgeOldDataForPatient(patientId: Long, cutoffMs: Long) {

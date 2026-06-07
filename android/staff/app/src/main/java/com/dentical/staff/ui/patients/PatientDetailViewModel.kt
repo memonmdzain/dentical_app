@@ -70,20 +70,25 @@ class PatientDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PatientDetailUiState())
     val uiState: StateFlow<PatientDetailUiState> = _uiState.asStateFlow()
 
+    // Tracks whether flows have been set up for this patient — only done once per ViewModel
+    private var flowsStarted = false
     private var loadedPatientId = -1L
 
-    // Jobs for Room flow collection — cancelled and restarted when filter changes
+    // Cancellable jobs for Room flow collection — restarted when filter changes
     private var treatmentsJob: Job? = null
     private var visitsJob: Job? = null
     private var financialJob: Job? = null
 
     fun loadPatient(id: Long) {
-        if (loadedPatientId == id) return
-        loadedPatientId = id
-
+        // Always re-run the Supabase pull so visits are always fresh
         viewModelScope.launch { treatmentRepository.pullForPatient(id) }
 
-        // Patient info — always unfiltered
+        // Only set up flows once per ViewModel instance
+        if (flowsStarted && loadedPatientId == id) return
+        flowsStarted = true
+        loadedPatientId = id
+
+        // Patient info flow
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             patientRepository.getPatientByIdFlow(id)
@@ -93,15 +98,10 @@ class PatientDetailViewModel @Inject constructor(
                 }
         }
 
-        // Start default filter (Last 1M) Room collection
+        // Start default filter Room flows
         collectFromRoom(id, TreatmentRepository.oneMonthAgoMs())
     }
 
-    /**
-     * Called when the user selects a filter chip.
-     * Default (LAST_1M) reads from Room.
-     * Non-default filters query Supabase directly if online, show error if offline.
-     */
     fun onFilterSelected(
         filter: TreatmentDateFilter,
         customFromMs: Long? = null,
@@ -120,10 +120,7 @@ class PatientDetailViewModel @Inject constructor(
         }
 
         when (filter) {
-            TreatmentDateFilter.LAST_1M -> {
-                // Cancel any remote fetch jobs, go back to Room
-                collectFromRoom(patientId, TreatmentRepository.oneMonthAgoMs())
-            }
+            TreatmentDateFilter.LAST_1M -> collectFromRoom(patientId, TreatmentRepository.oneMonthAgoMs())
             TreatmentDateFilter.LAST_6M -> fetchFromSupabase(patientId, monthsAgoMs(6), System.currentTimeMillis())
             TreatmentDateFilter.LAST_12M -> fetchFromSupabase(patientId, monthsAgoMs(12), System.currentTimeMillis())
             TreatmentDateFilter.CUSTOM -> {
@@ -134,7 +131,6 @@ class PatientDetailViewModel @Inject constructor(
         }
     }
 
-    /** Starts (or restarts) Room flow collection for the default filter. */
     private fun collectFromRoom(patientId: Long, fromMs: Long) {
         treatmentsJob?.cancel()
         visitsJob?.cancel()
@@ -170,14 +166,12 @@ class PatientDetailViewModel @Inject constructor(
         }
     }
 
-    /** Fetches data directly from Supabase for non-default filters. Does not write to Room. */
     private fun fetchFromSupabase(patientId: Long, fromMs: Long, toMs: Long) {
         if (!networkMonitor.isConnected) {
             _uiState.update { it.copy(filterError = "Extended history requires an internet connection.") }
             return
         }
 
-        // Cancel Room flows — we're showing remote data
         treatmentsJob?.cancel()
         visitsJob?.cancel()
         financialJob?.cancel()
@@ -193,13 +187,8 @@ class PatientDetailViewModel @Inject constructor(
                     else 0.0
                 }
 
-                // Financial summary from remote data (in-memory calc)
                 val totalQuoted = remote.treatments.sumOf { it.quotedCost ?: 0.0 }
                 val standaloneCharged = remote.standaloneVisits.sumOf { it.costCharged }
-                // All visits (treatment-linked + standalone) for total paid
-                val allVisitIds = remote.crossRefs.values.flatten().map { it.visitId }.toSet()
-                // We can't easily compute totalPaid from remote data without fetching all visits,
-                // so we reuse the Room outstanding calc for ongoing treatments and sum it
                 val totalOutstanding = outstandings.values.sum()
                 val financialSummary = PatientFinancialSummary(
                     totalQuoted = totalQuoted,

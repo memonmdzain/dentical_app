@@ -47,16 +47,41 @@ class TreatmentDetailViewModel @Inject constructor(
     fun load(treatmentId: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val treatment = treatmentRepository.getTreatmentById(treatmentId)
+
+            // Try Room first; fall back to Supabase if not found (e.g. purged old treatment)
+            var treatment = treatmentRepository.getTreatmentById(treatmentId)
+            if (treatment == null) {
+                treatment = treatmentRepository.fetchTreatmentFromSupabase(treatmentId)
+            }
+
             val dentist = treatment?.dentistId?.let { appointmentRepository.getDentistById(it) }
             _uiState.update { it.copy(treatment = treatment, dentist = dentist, isLoading = false) }
+
+            // If treatment wasn't in Room (came from Supabase), also fetch its visits remotely
+            if (treatment != null) {
+                val notInRoom = treatmentRepository.getTreatmentById(treatmentId) == null
+                if (notInRoom) {
+                    val remoteVisitsAndRefs = treatmentRepository.fetchVisitsForTreatment(treatmentId)
+                    _uiState.update {
+                        it.copy(
+                            visits = remoteVisitsAndRefs.first,
+                            crossRefs = remoteVisitsAndRefs.second,
+                            visitCount = remoteVisitsAndRefs.first.size
+                        )
+                    }
+                }
+            }
         }
 
+        // Room-reactive flows for visits and cross refs (only fires if treatment is in Room)
         viewModelScope.launch {
             treatmentRepository.getVisitsByTreatment(treatmentId)
                 .catch { /* ignore — show empty list */ }
                 .collect { visits ->
-                    _uiState.update { it.copy(visits = visits, visitCount = visits.size) }
+                    // Only update from Room if we actually have visits (prevents overwriting remote data with empty)
+                    if (visits.isNotEmpty() || _uiState.value.visits.isEmpty()) {
+                        _uiState.update { it.copy(visits = visits, visitCount = visits.size) }
+                    }
                 }
         }
 
@@ -64,7 +89,9 @@ class TreatmentDetailViewModel @Inject constructor(
             treatmentRepository.getCrossRefsForTreatment(treatmentId)
                 .catch { /* ignore */ }
                 .collect { crossRefs ->
-                    _uiState.update { it.copy(crossRefs = crossRefs) }
+                    if (crossRefs.isNotEmpty() || _uiState.value.crossRefs.isEmpty()) {
+                        _uiState.update { it.copy(crossRefs = crossRefs) }
+                    }
                 }
         }
     }
