@@ -155,15 +155,24 @@ class TreatmentRepository @Inject constructor(
         toMs: Long?,
         pageSize: Int
     ): List<TreatmentDto> {
-        // Query 1: all ONGOING for this patient
-        val ongoingBuilder = sync.supabase.from("treatments").select {
-            if (patientId != null) filter { eq("patient_id", patientId) }
-            filter { eq("status", "ONGOING") }
-        }
-        val ongoing = ongoingBuilder.decodeList<TreatmentDto>()
-
-        // Query 2: closed treatments within date range (paginated)
+        // Query 1: ONGOING treatments
         var offset = 0L
+        val ongoing = mutableListOf<TreatmentDto>()
+        while (true) {
+            val page = sync.supabase.from("treatments").select {
+                filter {
+                    if (patientId != null) eq("patient_id", patientId)
+                    eq("status", "ONGOING")
+                }
+                range(offset, offset + pageSize - 1)
+            }.decodeList<TreatmentDto>()
+            ongoing.addAll(page)
+            if (page.size < pageSize) break
+            offset += pageSize
+        }
+
+        // Query 2: closed treatments within date range
+        offset = 0L
         val closed = mutableListOf<TreatmentDto>()
         while (true) {
             val page = sync.supabase.from("treatments").select {
